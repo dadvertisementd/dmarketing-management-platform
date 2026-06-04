@@ -1,0 +1,55 @@
+name: Build cPanel release package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, intl, pdo_sqlite, sqlite3, fileinfo, gd, zip
+          coverage: none
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare Laravel test environment
+        working-directory: backend
+        shell: pwsh
+        run: |
+          Copy-Item .env.example .env
+          php artisan key:generate
+          New-Item -ItemType File -Force database/database.sqlite | Out-Null
+          php artisan migrate --force
+
+      - name: Run Laravel tests
+        working-directory: backend
+        run: php artisan test
+
+      - name: Build deployment ZIP
+        shell: pwsh
+        run: ./scripts/build-deployment.ps1
+
+      - name: Upload deployment ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: dmarketing-cpanel-release
+          path: deployment/dmarketing-deploy.zip
+          if-no-files-found: error

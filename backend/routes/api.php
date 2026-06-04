@@ -1,0 +1,48 @@
+<?php
+
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\WorkspaceController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
+    Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/dashboard', [WorkspaceController::class, 'dashboard']);
+    Route::get('/clients', [WorkspaceController::class, 'clients']);
+    Route::get('/team-members', [WorkspaceController::class, 'teamMembers'])->middleware('role:admin,manager');
+    Route::post('/users', [WorkspaceController::class, 'storeUser'])->middleware('role:admin');
+    Route::patch('/users/{user}', [WorkspaceController::class, 'updateUser'])->middleware('role:admin');
+    Route::delete('/users/{user}', [WorkspaceController::class, 'destroyUser'])->middleware('role:admin');
+    Route::get('/projects', [WorkspaceController::class, 'projects']);
+    Route::get('/projects-workspace', [WorkspaceController::class, 'projectsWorkspace']);
+    Route::post('/projects', [WorkspaceController::class, 'storeProject'])->middleware('role:admin,manager');
+    Route::patch('/projects/{project}', [WorkspaceController::class, 'updateProject'])->middleware('role:admin,manager');
+    Route::delete('/projects/{project}', [WorkspaceController::class, 'destroyProject'])->middleware('role:admin,manager');
+    Route::get('/tasks', [WorkspaceController::class, 'tasks']);
+    Route::post('/tasks', [WorkspaceController::class, 'storeTask'])->middleware('role:admin,manager');
+    Route::patch('/tasks/{task}', [WorkspaceController::class, 'updateTask']);
+    Route::delete('/tasks/{task}', [WorkspaceController::class, 'destroyTask'])->middleware('role:admin,manager');
+    Route::post('/tasks/{task}/attachments', [WorkspaceController::class, 'storeTaskAttachments']);
+    Route::get('/tasks/{task}/attachments/{taskAttachment}/download', [WorkspaceController::class, 'downloadTaskAttachment']);
+    Route::delete('/tasks/{task}/attachments/{taskAttachment}', [WorkspaceController::class, 'destroyTaskAttachment']);
+    Route::post('/tasks/{task}/subtasks', [WorkspaceController::class, 'storeTaskSubtask']);
+    Route::patch('/tasks/{task}/subtasks/{taskSubtask}', [WorkspaceController::class, 'updateTaskSubtask']);
+    Route::delete('/tasks/{task}/subtasks/{taskSubtask}', [WorkspaceController::class, 'destroyTaskSubtask']);
+    Route::post('/tasks/{task}/comments', [WorkspaceController::class, 'storeTaskComment']);
+    Route::get('/social-posts', [WorkspaceController::class, 'socialPosts']);
+    Route::post('/social-posts', [WorkspaceController::class, 'storeSocialPost'])->middleware('role:admin,manager,worker');
+    Route::patch('/social-posts/{socialPost}', [WorkspaceController::class, 'updateSocialPost']);
+    Route::delete('/social-posts/{socialPost}', [WorkspaceController::class, 'destroySocialPost'])->middleware('role:admin,manager,worker');
+    Route::get('/posting-tracker', [WorkspaceController::class, 'weeklyPostingTracker']);
+    Route::put('/clients/{client}/posting-schedule', [WorkspaceController::class, 'updatePostingSchedule'])->middleware('role:admin,manager');
+    Route::put('/clients/{client}/posting-check', [WorkspaceController::class, 'markPostingCheck'])->middleware('role:admin,manager,worker');
+    Route::get('/chat-messages', [WorkspaceController::class, 'chatMessages']);
+    Route::post('/chat-messages', [WorkspaceController::class, 'storeChatMessage']);
+    Route::get('/files', [WorkspaceController::class, 'files']);
+    Route::post('/files', [WorkspaceController::class, 'storeFile']);
+    Route::get('/files/{sharedFile}/download', [WorkspaceController::class, 'downloadFile']);
+    Route::delete('/files/{sharedFile}', [WorkspaceController::class, 'destroyFile']);
+    Route::get('/notifications', [WorkspaceController::class, 'notifications']);
+    Route::patch('/notifications/{notification}/read', [WorkspaceController::class, 'markNotificationRead']);
+    Route::get('/reports/team-performance', [WorkspaceController::class, 'teamPerformance'])->middleware('role:admin,manager');
+    Route::get('/integrations', [WorkspaceController::class, 'integrations'])->middleware('role:admin,manager');
+});
