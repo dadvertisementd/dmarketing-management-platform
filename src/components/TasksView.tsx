@@ -2,7 +2,10 @@ import React, { useEffect, useId, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Clock,
+  FileText,
   Filter,
+  Film,
+  Image as ImageIcon,
   ListChecks,
   MessageSquare,
   MoreVertical,
@@ -409,27 +412,38 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
         ) : (
           <div className="space-y-4">
             {filteredTasks.map((task, index) => (
-              <motion.div key={task.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className={cn('group p-6 rounded-[2rem] border border-gray-50 hover:border-gray-100 hover:bg-gray-50 transition-all flex items-center gap-6', task.status === 'completed' && 'opacity-60')}>
-                <button onClick={() => cycleStatus(task)} className={cn('w-8 h-8 rounded-xl flex items-center justify-center transition-all border-2', task.status === 'completed' ? 'bg-[#00c875] border-[#00c875] text-white' : 'border-gray-100 text-transparent hover:border-gray-900 hover:text-gray-900')}>
+              <motion.div key={task.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className={cn('group rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all hover:border-gray-200 hover:bg-gray-50/70 hover:shadow-md', task.status === 'completed' && 'opacity-60')}>
+                <div className="flex items-start gap-5">
+                <button onClick={() => cycleStatus(task)} className={cn('mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border-2 transition-all', task.status === 'completed' ? 'bg-[#00c875] border-[#00c875] text-white' : 'border-gray-100 text-transparent hover:border-gray-900 hover:text-gray-900')}>
                   <CheckCircle2 size={20} />
                 </button>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
                     <h4 className={cn('text-lg font-bold text-gray-900 group-hover:text-[#FF6321] transition-all truncate', task.status === 'completed' && 'line-through text-gray-400')}>{task.title}</h4>
                     {task.project_id && <div className="px-2 py-0.5 bg-gray-100 text-gray-400 rounded-lg text-[10px] font-bold uppercase tracking-wider">{projects.find((project) => project.id === task.project_id)?.name || 'Project'}</div>}
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-400 font-medium">
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 font-medium">
                     <span className="flex items-center gap-1.5"><Clock size={14} /> {task.due_at ? formatDate(task.due_at) : 'No deadline'}</span>
                     <span>{workers.find((worker) => worker.id === task.assigned_to)?.name || 'Unassigned'}</span>
                   </div>
+                  {task.description ? (
+                    <p className="mt-4 max-w-3xl whitespace-pre-line text-sm font-medium leading-relaxed text-gray-500 line-clamp-3">{task.description}</p>
+                  ) : (
+                    <p className="mt-4 text-sm font-medium italic text-gray-300">No description added yet.</p>
+                  )}
+                  <TaskAttachmentPreviewStrip task={task} />
                   <TaskSignals task={task} />
-                  <AttachmentLinks task={task} />
                 </div>
-                <Badge value={uiTaskPriority(task.priority)} type="priority" />
-                <Badge value={uiTaskStatus(task.status)} type="status" />
-                <div className="flex items-center bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
-                  <button onClick={() => openTaskDetails(task)} className="p-3 text-gray-400 hover:text-gray-900 transition-all border-r border-gray-100"><MoreVertical size={18} /></button>
+                <div className="flex shrink-0 flex-col items-end gap-3">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Badge value={uiTaskPriority(task.priority)} type="priority" />
+                    <Badge value={uiTaskStatus(task.status)} type="status" />
+                  </div>
+                  <div className="flex items-center overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                  <button onClick={() => openTaskDetails(task)} className="p-3 text-gray-400 transition-all hover:text-gray-900" title="Open task details"><MoreVertical size={18} /></button>
                   {canManage && <button onClick={() => deleteTask(task)} className="p-3 text-gray-400 hover:text-red-500 transition-all"><Trash2 size={18} /></button>}
+                  </div>
+                </div>
                 </div>
               </motion.div>
             ))}
@@ -512,8 +526,9 @@ function TaskCard({ task, projects, workers, onCycle, onEdit, onDelete, canManag
       </div>
       <h5 className="text-sm font-bold text-gray-900 mb-2">{task.title}</h5>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{projects.find((project) => project.id === task.project_id)?.name || 'General'}</p>
+      {task.description && <p className="mt-3 line-clamp-3 text-xs font-medium leading-relaxed text-gray-500">{task.description}</p>}
+      <TaskAttachmentPreviewStrip task={task} compact />
       <TaskSignals task={task} />
-      <AttachmentLinks task={task} />
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200/50">
         <span className="text-[10px] font-bold text-gray-400">{workers.find((worker) => worker.id === task.assigned_to)?.name || 'Unassigned'}</span>
         <span className="text-[10px] font-bold text-gray-400">{task.due_at ? formatDate(task.due_at) : 'No date'}</span>
@@ -524,6 +539,91 @@ function TaskCard({ task, projects, workers, onCycle, onEdit, onDelete, canManag
       </div>
     </div>
   );
+}
+
+function TaskAttachmentPreviewStrip({ task, compact = false }: { task: Task; compact?: boolean }) {
+  const attachments = task.attachments || [];
+
+  if (attachments.length === 0) return null;
+
+  const visibleAttachments = attachments.slice(0, compact ? 2 : 4);
+  const extraCount = attachments.length - visibleAttachments.length;
+
+  return (
+    <div className={cn('mt-4 flex flex-wrap gap-3', compact && 'gap-2')}>
+      {visibleAttachments.map((attachment) => {
+        const isImage = attachment.mime_type?.startsWith('image/');
+        return (
+          <a
+            key={attachment.id}
+            href={taskAttachmentDownloadUrl(task.id, attachment.id)}
+            className={cn(
+              'group/attachment overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-sm transition-all hover:border-gray-300 hover:shadow-md',
+              isImage ? (compact ? 'h-24 w-full' : 'h-28 w-44') : 'inline-flex max-w-full items-center gap-2 px-3 py-2',
+            )}
+            title={attachment.name}
+          >
+            {isImage ? (
+              <TaskImagePreview taskId={task.id} attachmentId={attachment.id} name={attachment.name} />
+            ) : (
+              <>
+                <FileIcon mime={attachment.mime_type} />
+                <span className="min-w-0 truncate text-[11px] font-bold text-gray-500 group-hover/attachment:text-gray-900">{attachment.name}</span>
+              </>
+            )}
+          </a>
+        );
+      })}
+      {extraCount > 0 && (
+        <span className="rounded-2xl bg-gray-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+          +{extraCount} more
+        </span>
+      )}
+    </div>
+  );
+}
+
+function TaskImagePreview({ taskId, attachmentId, name }: { taskId: number | string; attachmentId: number | string; name: string }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+
+    fetch(taskAttachmentDownloadUrl(taskId, attachmentId), {
+      credentials: 'include',
+      headers: { Accept: 'image/*,*/*' },
+    })
+      .then((response) => response.ok ? response.blob() : Promise.reject(new Error('Preview failed')))
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) setPreviewUrl(null);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [attachmentId, taskId]);
+
+  if (!previewUrl) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gray-50 text-gray-300">
+        <ImageIcon size={24} />
+      </div>
+    );
+  }
+
+  return <img src={previewUrl} alt={name} className="h-full w-full object-cover transition-transform duration-300 group-hover/attachment:scale-105" />;
+}
+
+function FileIcon({ mime }: { mime?: string | null }) {
+  if (mime?.startsWith('image/')) return <ImageIcon size={14} />;
+  if (mime?.startsWith('video/')) return <Film size={14} />;
+  return <FileText size={14} />;
 }
 
 function TaskSignals({ task }: { task: Task }) {
