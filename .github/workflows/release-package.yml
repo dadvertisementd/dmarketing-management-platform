@@ -35,6 +35,15 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item .env.example .env
+          (Get-Content .env) `
+            -replace '^APP_ENV=.*', 'APP_ENV=testing' `
+            -replace '^APP_DEBUG=.*', 'APP_DEBUG=true' `
+            -replace '^DB_CONNECTION=.*', 'DB_CONNECTION=sqlite' `
+            -replace '^DB_DATABASE=.*', 'DB_DATABASE=database/database.sqlite' `
+            -replace '^SESSION_DRIVER=.*', 'SESSION_DRIVER=array' `
+            -replace '^CACHE_STORE=.*', 'CACHE_STORE=array' `
+            -replace '^QUEUE_CONNECTION=.*', 'QUEUE_CONNECTION=sync' |
+            Set-Content .env
           php artisan key:generate
           New-Item -ItemType File -Force database/database.sqlite | Out-Null
           php artisan migrate --force
