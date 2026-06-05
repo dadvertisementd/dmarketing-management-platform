@@ -240,6 +240,10 @@ async function performRequest<T>(path: string, init: RequestInit = {}): Promise<
   const contentType = response.headers.get('content-type') || '';
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('laravel-auth-expired'));
+    }
+
     const error = contentType.includes('application/json')
       ? await response.json().catch(() => ({ message: 'Request failed' }))
       : { message: 'The server returned an HTML page instead of an API response. Check the Laravel deployment and caches.' };

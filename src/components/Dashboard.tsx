@@ -52,7 +52,7 @@ export const Dashboard: React.FC = () => {
     { id: 'projects', label: 'Projects', icon: Briefcase },
     { id: 'social', label: 'Social Media', icon: Instagram },
     { id: 'vault', label: 'Brand Vault', icon: Shield },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    ...(isManager ? [{ id: 'reports', label: 'Reports', icon: BarChart3 }] : []),
     { id: 'chat', label: 'Communication', icon: MessageSquare },
     { id: 'roadmap', label: 'Roadmap', icon: Calendar },
   ];
@@ -61,7 +61,14 @@ export const Dashboard: React.FC = () => {
     { id: 'chat', label: 'Communication', icon: MessageSquare },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
-  const canUseGlobalNew = activeTab === 'team' ? isAdmin : (isAdmin || isManager || isWorker);
+  const canUseGlobalNew =
+    activeTab === 'team'
+      ? isAdmin
+      : activeTab === 'clients' || activeTab === 'projects' || activeTab === 'tasks'
+        ? isManager
+        : activeTab === 'social'
+          ? isWorker
+          : false;
   const globalNewLabel = activeTab === 'clients' ? 'Client' : activeTab === 'projects' ? 'Project' : activeTab === 'social' ? 'Post' : activeTab === 'team' ? 'Member' : 'Task';
 
   useEffect(() => {

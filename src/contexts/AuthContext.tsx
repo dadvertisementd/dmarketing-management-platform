@@ -87,6 +87,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  useEffect(() => {
+    const handleExpiredSession = () => setUser(null);
+
+    window.addEventListener('laravel-auth-expired', handleExpiredSession);
+
+    return () => {
+      window.removeEventListener('laravel-auth-expired', handleExpiredSession);
+    };
+  }, []);
+
   const login = async (email: string, password: string) => {
     const response = await laravelApi.login(email, password);
     setUser(toProfile(response.user));
