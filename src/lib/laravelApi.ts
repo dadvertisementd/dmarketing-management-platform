@@ -237,14 +237,22 @@ async function performRequest<T>(path: string, init: RequestInit = {}): Promise<
     },
   });
 
+  const contentType = response.headers.get('content-type') || '';
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
+    const error = contentType.includes('application/json')
+      ? await response.json().catch(() => ({ message: 'Request failed' }))
+      : { message: 'The server returned an HTML page instead of an API response. Check the Laravel deployment and caches.' };
     const validation = error.errors ? Object.values(error.errors).flat().join(' ') : '';
     throw new Error(validation || error.message || 'Request failed');
   }
 
   if (response.status === 204) {
     return undefined as T;
+  }
+
+  if (!contentType.includes('application/json')) {
+    throw new Error('The server returned an HTML page instead of an API response. Check the Laravel deployment and caches.');
   }
 
   return response.json();
