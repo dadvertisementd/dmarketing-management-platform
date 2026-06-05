@@ -48,6 +48,19 @@ const emptyTask = {
   dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10),
 };
 
+const taskBoards = [
+  { id: 'all', label: 'All Tasks', workflowLabel: 'All visible work' },
+  { id: 'todo', label: 'To Do', workflowLabel: 'Brief queued' },
+  { id: 'in-progress', label: 'In Progress', workflowLabel: 'Design / production' },
+  { id: 'review', label: 'Review', workflowLabel: 'Internal or client review' },
+  { id: 'done', label: 'Completed', workflowLabel: 'Approved / delivered' },
+];
+
+function taskStatusLabel(status?: string | null): string {
+  const uiStatus = uiTaskStatus(status);
+  return taskBoards.find((board) => board.id === uiStatus)?.workflowLabel || uiStatus.replace('-', ' ');
+}
+
 export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClose }) => {
   const { user, isAdmin, isManager } = useAuth();
   const canManage = isAdmin || isManager;
@@ -63,6 +76,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
+  const [showMineOnly, setShowMineOnly] = useState(false);
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [newTask, setNewTask] = useState(emptyTask);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -309,40 +323,51 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
     }
   };
 
-  const filteredTasks = useMemo(() => tasks.filter((task) => {
+  const scopedTasks = useMemo(() => {
+    if (!showMineOnly || !user?.id) return tasks;
+    return tasks.filter((task) => task.assigned_to === user.id);
+  }, [showMineOnly, tasks, user?.id]);
+
+  const filteredTasks = useMemo(() => scopedTasks.filter((task) => {
     const uiStatus = uiTaskStatus(task.status);
     const uiPriority = uiTaskPriority(task.priority);
     const matchesBoard = activeBoard === 'all' || uiStatus === activeBoard;
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) || task.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesPriority = !filterPriority || uiPriority === filterPriority;
     return matchesBoard && matchesSearch && matchesPriority;
-  }), [activeBoard, filterPriority, searchTerm, tasks]);
+  }), [activeBoard, filterPriority, scopedTasks, searchTerm]);
 
   const counts = {
-    total: tasks.length,
-    todo: tasks.filter((task) => task.status === 'todo').length,
-    inProgress: tasks.filter((task) => task.status === 'in_progress').length,
-    review: tasks.filter((task) => task.status === 'review').length,
-    done: tasks.filter((task) => task.status === 'completed').length,
+    total: scopedTasks.length,
+    todo: scopedTasks.filter((task) => task.status === 'todo').length,
+    inProgress: scopedTasks.filter((task) => task.status === 'in_progress').length,
+    review: scopedTasks.filter((task) => task.status === 'review').length,
+    done: scopedTasks.filter((task) => task.status === 'completed').length,
   };
+  const assignedToMeCount = user?.id ? tasks.filter((task) => task.assigned_to === user.id).length : 0;
 
   return (
     <div className="space-y-8 pb-20">
       <div className="flex flex-wrap items-center gap-4">
-        {[
-          { id: 'all', label: 'All Tasks', count: counts.total },
-          { id: 'todo', label: 'To Do', count: counts.todo },
-          { id: 'in-progress', label: 'In Progress', count: counts.inProgress },
-          { id: 'review', label: 'Review', count: counts.review },
-          { id: 'done', label: 'Completed', count: counts.done },
-        ].map((tab) => (
+        <button
+          type="button"
+          onClick={() => setShowMineOnly((value) => !value)}
+          className={cn('px-5 py-2.5 rounded-2xl flex items-center gap-3 font-medium transition-all text-sm border', showMineOnly ? 'bg-[#FF6321] text-white border-[#FF6321] shadow-lg shadow-orange-100' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50')}
+        >
+          My Work
+          <span className={cn('px-2 py-0.5 rounded-lg text-[10px] font-bold', showMineOnly ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400')}>{assignedToMeCount}</span>
+        </button>
+
+        {taskBoards.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveBoard(tab.id)}
             className={cn('px-5 py-2.5 rounded-2xl flex items-center gap-3 font-medium transition-all text-sm border', activeBoard === tab.id ? 'bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-200' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50')}
           >
             {tab.label}
-            <span className={cn('px-2 py-0.5 rounded-lg text-[10px] font-bold', activeBoard === tab.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400')}>{tab.count}</span>
+            <span className={cn('px-2 py-0.5 rounded-lg text-[10px] font-bold', activeBoard === tab.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400')}>
+              {tab.id === 'all' ? counts.total : tab.id === 'todo' ? counts.todo : tab.id === 'in-progress' ? counts.inProgress : tab.id === 'review' ? counts.review : counts.done}
+            </span>
           </button>
         ))}
 
@@ -364,7 +389,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
 
       <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-50">
         <div className="flex items-center justify-between mb-8">
-          <h3 className="text-2xl font-serif font-bold text-gray-900 italic">Work Stream</h3>
+          <div>
+            <h3 className="text-2xl font-serif font-bold text-gray-900 italic">{showMineOnly ? 'My Work Stream' : 'Work Stream'}</h3>
+            <p className="mt-1 text-xs font-bold uppercase tracking-widest text-gray-400">{taskBoards.find((board) => board.id === activeBoard)?.workflowLabel || 'All visible work'}</p>
+          </div>
           <div className="flex items-center gap-4">
             <input
               type="text"
@@ -398,11 +426,14 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
           <div className="py-20 text-center text-gray-400">Loading tasks...</div>
         ) : viewMode === 'kanban' ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {['todo', 'in-progress', 'review', 'done'].map((status) => (
-              <div key={status} className="space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-gray-400">{status.replace('-', ' ')}</h4>
+            {taskBoards.filter((board) => board.id !== 'all').map((board) => (
+              <div key={board.id} className="space-y-4">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-gray-500">{board.label}</h4>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-300">{board.workflowLabel}</p>
+                </div>
                 <div className="space-y-4 min-h-[420px]">
-                  {filteredTasks.filter((task) => uiTaskStatus(task.status) === status).map((task) => <TaskCard key={task.id} task={task} projects={projects} workers={workers} onCycle={() => cycleStatus(task)} onEdit={() => openTaskDetails(task)} onDelete={() => deleteTask(task)} canManage={canManage} />)}
+                  {filteredTasks.filter((task) => uiTaskStatus(task.status) === board.id).map((task) => <TaskCard key={task.id} task={task} projects={projects} workers={workers} onCycle={() => cycleStatus(task)} onEdit={() => openTaskDetails(task)} onDelete={() => deleteTask(task)} canManage={canManage} />)}
                 </div>
               </div>
             ))}
@@ -565,6 +596,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
                   <Select label="Priority" value={taskFormValue.priority} onChange={(value) => updateTaskForm({ priority: value })} disabled={isSaving || !canManage} options={['low', 'medium', 'high', 'urgent'].map((value) => ({ value, label: value }))} />
                 </div>
                 <Select label="Status" value={taskFormValue.status} onChange={(value) => updateTaskForm({ status: value })} disabled={isSaving} options={[{ value: 'todo', label: 'To Do' }, { value: 'in-progress', label: 'In Progress' }, { value: 'review', label: 'Review' }, { value: 'done', label: 'Done' }]} />
+                {editingTask && <TaskContextPanel task={editingTask} projects={projects} clients={clients} workers={workers} />}
                 {editingTask && <AttachmentLinks task={editingTask} compact={false} />}
                 <FilePicker selectedFiles={selectedFiles} onChange={setSelectedFiles} onError={setError} disabled={isSaving} />
                 {editingTask && (
@@ -986,11 +1018,99 @@ function FilePicker({ selectedFiles, onChange, onError, disabled }: { selectedFi
   );
 }
 
+function TaskContextPanel({ task, projects, clients, workers }: { task: Task; projects: Project[]; clients: Client[]; workers: LaravelUser[] }) {
+  const project = projects.find((item) => item.id === task.project_id);
+  const client = clients.find((item) => item.id === (task.client_id || project?.client_id));
+  const assignee = workers.find((worker) => worker.id === task.assigned_to);
+  const contextItems = [
+    { label: 'Client', value: client?.name || 'No client linked' },
+    { label: 'Workstream', value: project?.name || 'Daily client task' },
+    { label: 'Assignee', value: assignee?.name || 'Unassigned' },
+    { label: 'Due date', value: task.due_at ? formatDate(task.due_at) : 'No deadline' },
+    { label: 'Workflow', value: taskStatusLabel(task.status) },
+  ];
+
+  return (
+    <section className="rounded-[2rem] border border-gray-100 bg-gray-50 p-5">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <h4 className="text-sm font-bold text-gray-900">Creative brief context</h4>
+          <p className="text-xs font-medium text-gray-400">Quick reference for the client, workstream, owner, and approval stage.</p>
+        </div>
+        <Badge value={uiTaskStatus(task.status)} type="status" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {contextItems.map((item) => (
+          <div key={item.label} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-gray-100">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{item.label}</p>
+            <p className="mt-1 truncate text-sm font-bold text-gray-900">{item.value}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function AttachmentLinks({ task, compact = true }: { task: Task; compact?: boolean }) {
   const attachments = task.attachments || [];
 
   if (attachments.length === 0) {
     return compact ? null : <p className="text-xs font-medium text-gray-400">No attachments on this task.</p>;
+  }
+
+  if (!compact) {
+    const imageAttachments = attachments.filter((attachment) => attachment.mime_type?.startsWith('image/'));
+    const fileAttachments = attachments.filter((attachment) => !attachment.mime_type?.startsWith('image/'));
+
+    return (
+      <section className="rounded-[2rem] border border-gray-100 bg-gray-50 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-bold text-gray-900">Assets and references</h4>
+            <p className="text-xs font-medium text-gray-400">{attachments.length} file{attachments.length === 1 ? '' : 's'} attached to this task.</p>
+          </div>
+          <Paperclip size={18} className="text-gray-300" />
+        </div>
+
+        {imageAttachments.length > 0 && (
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {imageAttachments.map((attachment) => (
+              <a
+                key={attachment.id}
+                href={taskAttachmentDownloadUrl(task.id, attachment.id)}
+                className="group/attachment overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm transition-all hover:border-gray-300 hover:shadow-md"
+                title={`Open ${attachment.name}`}
+              >
+                <div className="h-56 bg-gray-100">
+                  <TaskImagePreview taskId={task.id} attachmentId={attachment.id} name={attachment.name} />
+                </div>
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="min-w-0 truncate text-xs font-bold text-gray-700">{attachment.name}</span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-400">{formatFileSize(attachment.size)}</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
+
+        {fileAttachments.length > 0 && (
+          <div className="space-y-2">
+            {fileAttachments.map((attachment) => (
+              <a
+                key={attachment.id}
+                href={taskAttachmentDownloadUrl(task.id, attachment.id)}
+                className="flex max-w-full items-center gap-3 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-gray-600 ring-1 ring-gray-100 transition-all hover:bg-gray-900 hover:text-white"
+                title={`Download ${attachment.name}`}
+              >
+                <FileIcon mime={attachment.mime_type} />
+                <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
+                <span className="shrink-0 text-xs text-current/60">{formatFileSize(attachment.size)}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
+    );
   }
 
   return (
@@ -1028,7 +1148,8 @@ function Badge({ value, type }: { value?: string | null; type: 'status' | 'prior
     medium: 'bg-[#579bfc] text-white',
     low: 'bg-[#784bd1] text-white',
   };
-  return <div className={cn('px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest min-w-[80px] text-center', map[normalizedValue] || 'bg-gray-100 text-gray-400')}>{normalizedValue.replace('-', ' ')}</div>;
+  const label = type === 'status' ? taskStatusLabel(normalizedValue) : normalizedValue.replace('-', ' ');
+  return <div className={cn('px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest min-w-[80px] text-center', map[normalizedValue] || 'bg-gray-100 text-gray-400')}>{label}</div>;
 }
 
 function EmptyTasks({ onCreate }: { onCreate?: () => void }) {
