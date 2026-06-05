@@ -92,7 +92,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "deployment/public_html" | Out-Null
-          Copy-Item -LiteralPath "deployment/dmarketing-app/public/*" -Destination "deployment/public_html" -Recurse -Force
+          Copy-Item -Path "deployment/dmarketing-app/public/*" -Destination "deployment/public_html" -Recurse -Force
           $indexPhp = @'
           <?php
 
