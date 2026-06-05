@@ -42,6 +42,11 @@ if ($LASTEXITCODE -gt 7) {
     throw "robocopy failed while copying Laravel app."
 }
 
+$bootstrapCache = Join-Path $appOut "bootstrap\cache"
+if (Test-Path $bootstrapCache) {
+    Get-ChildItem -LiteralPath $bootstrapCache -Filter "*.php" -File | Remove-Item -Force
+}
+
 Push-Location $appOut
 try {
     composer install --no-dev --optimize-autoloader --no-interaction --no-scripts

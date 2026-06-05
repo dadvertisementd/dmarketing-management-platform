@@ -83,6 +83,7 @@ jobs:
             throw "robocopy failed while copying Laravel app."
           }
           $global:LASTEXITCODE = 0
+          Remove-Item -Path "deployment/dmarketing-app/bootstrap/cache/*.php" -Force -ErrorAction SilentlyContinue
 
       - name: Install production Composer dependencies
         working-directory: deployment/dmarketing-app
