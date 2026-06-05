@@ -5,10 +5,15 @@ import {
   Calendar as CalendarIcon,
   Edit2,
   Filter,
+  Globe2,
+  Instagram,
+  Megaphone,
+  Palette,
   Plus,
   Search,
   Trash2,
   Users,
+  Video,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -35,6 +40,57 @@ const emptyProject = {
   progress: 0,
 };
 
+const projectTemplates = [
+  {
+    id: 'ongoing_social_media',
+    title: 'Ongoing Social Media',
+    type: 'ongoing_social_media',
+    status: 'active',
+    icon: Instagram,
+    description: 'Monthly content planning, creative production, posting checks, engagement, and reporting for long-term clients.',
+  },
+  {
+    id: 'campaign_launch',
+    title: 'Campaign Launch',
+    type: 'campaign',
+    status: 'briefing',
+    icon: Megaphone,
+    description: 'A fixed campaign with brief, concepts, assets, approvals, publishing dates, and performance review.',
+  },
+  {
+    id: 'website_build',
+    title: 'Website Build',
+    type: 'website',
+    status: 'briefing',
+    icon: Globe2,
+    description: 'Structure website work from discovery and content to design, development, testing, launch, and maintenance handoff.',
+  },
+  {
+    id: 'brand_identity',
+    title: 'Brand Identity',
+    type: 'branding',
+    status: 'briefing',
+    icon: Palette,
+    description: 'Manage naming, logo, visual direction, brand guidelines, client review rounds, and final asset delivery.',
+  },
+  {
+    id: 'video_ads',
+    title: 'Video Ads',
+    type: 'video_ads',
+    status: 'briefing',
+    icon: Video,
+    description: 'Track scripts, storyboards, shoots, edits, subtitles, client feedback, exports, and platform-ready ad versions.',
+  },
+  {
+    id: 'creative_approval',
+    title: 'Creative Approval',
+    type: 'creative_approval',
+    status: 'active',
+    icon: Briefcase,
+    description: 'A lightweight approval workflow for designs, social posts, brand assets, revisions, and final sign-off.',
+  },
+] as const;
+
 export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onModalClose, selectedProjectId }) => {
   const { isAdmin, isManager } = useAuth();
   const canManage = isAdmin || isManager;
@@ -52,6 +108,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
   const [newProject, setNewProject] = useState(emptyProject);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -83,6 +140,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingProject(null);
+    setSelectedTemplateId(null);
     setError(null);
     onModalClose?.();
   };
@@ -120,6 +178,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
     }
   };
 
+  const applyProjectTemplate = (template: typeof projectTemplates[number]) => {
+    setSelectedTemplateId(template.id);
+    updateForm({
+      name: formValue.name.trim() ? formValue.name : template.title,
+      description: template.description,
+      type: template.type,
+      status: template.status,
+      progress: 0,
+    });
+  };
+
   const saveProject = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canManage) return;
@@ -151,6 +220,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
         const created = await laravelApi.createProject(payload);
         setProjects((items) => [created, ...items]);
         setNewProject(emptyProject);
+        setSelectedTemplateId(null);
       }
       closeModal();
     } catch (err: any) {
@@ -295,6 +365,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
               </div>
               <form onSubmit={saveProject} className="p-8 space-y-6">
                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs border border-red-100">{error}</div>}
+                {!editingProject && (
+                  <ProjectTemplatePicker
+                    templates={projectTemplates}
+                    selectedId={selectedTemplateId}
+                    onSelect={applyProjectTemplate}
+                  />
+                )}
                 <Input label="Project Name" value={formValue.name} onChange={(value) => updateForm({ name: value })} disabled={isSaving} />
                 <Textarea label="Description" value={formValue.description} onChange={(value) => updateForm({ description: value })} disabled={isSaving} />
                 <Select label="Client" value={formValue.clientId} onChange={(value) => updateForm({ clientId: value })} disabled={isSaving} options={[{ value: '', label: clients.length === 0 ? 'Create a client first' : 'Select client' }, ...clients.map((client) => ({ value: String(client.id), label: client.name }))]} />
@@ -304,6 +381,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
                   { value: 'website', label: 'Website' },
                   { value: 'branding', label: 'Branding' },
                   { value: 'video_ads', label: 'Video ads' },
+                  { value: 'creative_approval', label: 'Creative approval' },
                   { value: 'content_retainer', label: 'Content retainer' },
                 ]} />
                 <ProjectTeamPicker
@@ -377,6 +455,59 @@ function DetailCard({ label, value }: { label: string; value: string }) {
     <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{label}</p>
       <p className="text-xl font-serif font-bold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function ProjectTemplatePicker({
+  templates,
+  selectedId,
+  onSelect,
+}: {
+  templates: typeof projectTemplates;
+  selectedId: string | null;
+  onSelect: (template: typeof projectTemplates[number]) => void;
+}) {
+  return (
+    <div className="rounded-[2rem] border border-gray-100 bg-gray-50/70 p-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-widest text-gray-400">Start from a template</label>
+          <p className="mt-1 text-xs font-medium text-gray-500">Pick the closest agency workflow, then edit the details below.</p>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-300">Optional</span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {templates.map((template) => {
+          const Icon = template.icon;
+          const selected = selectedId === template.id;
+
+          return (
+            <button
+              key={template.id}
+              type="button"
+              onClick={() => onSelect(template)}
+              className={cn(
+                'group rounded-2xl border p-4 text-left transition-all',
+                selected
+                  ? 'border-gray-900 bg-white shadow-md shadow-gray-100'
+                  : 'border-white bg-white/70 hover:border-[#FF6321]/40 hover:bg-white',
+              )}
+            >
+              <div className="mb-3 flex items-center gap-3">
+                <span className={cn(
+                  'flex h-10 w-10 items-center justify-center rounded-xl transition-all',
+                  selected ? 'bg-gray-900 text-white' : 'bg-orange-50 text-[#FF6321] group-hover:bg-[#FF6321] group-hover:text-white',
+                )}>
+                  <Icon size={18} />
+                </span>
+                <span className="text-sm font-bold text-gray-900">{template.title}</span>
+              </div>
+              <p className="line-clamp-3 text-xs font-medium leading-relaxed text-gray-500">{template.description}</p>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
