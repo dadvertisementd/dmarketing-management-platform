@@ -73,7 +73,7 @@ export const ReportsView: React.FC = () => {
           <p className="text-gray-400 text-sm">Analytics across client marketing funnels and team operations.</p>
         </div>
         <div className="flex gap-3">
-          <select value={timeRange} onChange={(event) => setTimeRange(event.target.value)} className="px-5 py-3 bg-white border border-gray-100 rounded-2xl text-sm font-bold text-gray-500">
+          <select value={timeRange} onChange={(event) => setTimeRange(event.target.value)} className="select-arrow rounded-2xl border border-gray-100 bg-white py-3 pl-5 text-sm font-bold text-gray-500">
             {['Today', 'This Week', 'This Month', 'This Quarter', 'Year to Date'].map((range) => <option key={range}>{range}</option>)}
           </select>
           <button onClick={() => window.print()} className="px-5 py-3 bg-gray-900 text-white rounded-2xl text-sm font-bold shadow-lg shadow-gray-200 hover:bg-gray-800 transition-all flex items-center gap-2">

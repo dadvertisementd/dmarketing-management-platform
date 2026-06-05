@@ -450,7 +450,7 @@ function Select({ label, value, onChange, options, disabled }: { label: string; 
   return (
     <div>
       <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{label}</label>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full bg-gray-50 border-none rounded-2xl p-4 text-gray-900 font-medium outline-none h-14 capitalize" disabled={disabled}>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="select-arrow h-14 w-full rounded-2xl border-none bg-gray-50 py-4 pl-4 font-medium capitalize text-gray-900 outline-none" disabled={disabled}>
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </div>

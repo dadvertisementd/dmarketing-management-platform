@@ -228,12 +228,12 @@ export const TeamView: React.FC<TeamViewProps> = ({ forceShowModal, onModalClose
                         />
                       </td>
                       <td className="px-4 py-5">
-                        <select disabled={disabled} value={member.role} onChange={(event) => updateMember(member, { role: event.target.value as UserRole })} className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-widest text-gray-600 outline-none disabled:opacity-60">
+                        <select disabled={disabled} value={member.role} onChange={(event) => updateMember(member, { role: event.target.value as UserRole })} className="select-arrow rounded-xl border border-gray-100 bg-gray-50 py-2 pl-3 text-xs font-bold uppercase tracking-widest text-gray-600 outline-none disabled:opacity-60">
                           {permissionRoles.map((role) => <option key={role} value={role}>{role}</option>)}
                         </select>
                       </td>
                       <td className="px-4 py-5">
-                        <select disabled={disabled} value={member.title || ''} onChange={(event) => updateMember(member, { title: event.target.value })} className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none disabled:opacity-60">
+                        <select disabled={disabled} value={member.title || ''} onChange={(event) => updateMember(member, { title: event.target.value })} className="select-arrow w-full rounded-xl border border-gray-100 bg-gray-50 py-2 pl-3 text-sm text-gray-700 outline-none disabled:opacity-60">
                           <option value="">Select position</option>
                           {teamPositions.map((position) => <option key={position} value={position}>{position}</option>)}
                         </select>
@@ -345,7 +345,7 @@ function Select({ label, value, onChange, options, placeholder }: { label: strin
   return (
     <div>
       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">{label}</label>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-4 text-sm font-medium focus:outline-none focus:border-[#FF6321] capitalize">
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="select-arrow w-full rounded-2xl border border-gray-100 bg-gray-50 py-4 pl-4 text-sm font-medium capitalize focus:outline-none focus:border-[#FF6321]">
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>

@@ -226,7 +226,7 @@ export const VaultView: React.FC = () => {
                     const firstProject = projects.find((project) => String(project.client_id) === nextClientId);
                     setUploadDraft((draft) => ({ ...draft, clientId: nextClientId, projectId: firstProject ? String(firstProject.id) : '' }));
                   }}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-4 text-sm font-medium focus:outline-none focus:border-[#FF6321]"
+                  className="select-arrow w-full rounded-2xl border border-gray-100 bg-gray-50 py-4 pl-4 text-sm font-medium focus:outline-none focus:border-[#FF6321]"
                 >
                   <option value="">Select client</option>
                   {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
@@ -239,7 +239,7 @@ export const VaultView: React.FC = () => {
                   value={uploadDraft.projectId}
                   onChange={(event) => setUploadDraft((draft) => ({ ...draft, projectId: event.target.value }))}
                   disabled={!uploadDraft.clientId}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-4 text-sm font-medium focus:outline-none focus:border-[#FF6321] disabled:opacity-50"
+                  className="select-arrow w-full rounded-2xl border border-gray-100 bg-gray-50 py-4 pl-4 text-sm font-medium focus:outline-none focus:border-[#FF6321] disabled:opacity-50"
                 >
                   <option value="">No project / general client asset</option>
                   {uploadProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
@@ -251,7 +251,7 @@ export const VaultView: React.FC = () => {
                 <select
                   value={uploadDraft.category}
                   onChange={(event) => setUploadDraft((draft) => ({ ...draft, category: event.target.value }))}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-4 text-sm font-medium focus:outline-none focus:border-[#FF6321]"
+                  className="select-arrow w-full rounded-2xl border border-gray-100 bg-gray-50 py-4 pl-4 text-sm font-medium focus:outline-none focus:border-[#FF6321]"
                 >
                   {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
                 </select>
