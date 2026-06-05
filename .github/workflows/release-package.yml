@@ -52,9 +52,18 @@ jobs:
         working-directory: backend
         run: php artisan test
 
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run TypeScript checks
+        run: npm run lint
+
+      - name: Build frontend assets
+        run: npm run build
+
       - name: Build deployment ZIP
         shell: pwsh
-        run: ./scripts/build-deployment.ps1
+        run: ./scripts/build-deployment.ps1 -SkipFrontendBuild
 
       - name: Upload deployment ZIP
         uses: actions/upload-artifact@v4

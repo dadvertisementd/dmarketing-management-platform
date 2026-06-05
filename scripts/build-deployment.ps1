@@ -1,6 +1,7 @@
 param(
     [string] $OutputDir = "deployment",
-    [string] $PackageName = "dmarketing-deploy.zip"
+    [string] $PackageName = "dmarketing-deploy.zip",
+    [switch] $SkipFrontendBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,9 +23,11 @@ foreach ($generatedPath in @($appOut, $publicOut, $zipPath)) {
 
 Push-Location $root
 try {
-    npm ci
-    npm run lint
-    npm run build
+    if (-not $SkipFrontendBuild) {
+        npm ci
+        npm run lint
+        npm run build
+    }
 }
 finally {
     Pop-Location
