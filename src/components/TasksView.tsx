@@ -412,9 +412,32 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
         ) : (
           <div className="space-y-4">
             {filteredTasks.map((task, index) => (
-              <motion.div key={task.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }} className={cn('group rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all hover:border-gray-200 hover:bg-gray-50/70 hover:shadow-md', task.status === 'completed' && 'opacity-60')}>
+              <motion.div
+                key={task.id}
+                role="button"
+                tabIndex={0}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03 }}
+                onClick={() => openTaskDetails(task)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openTaskDetails(task);
+                  }
+                }}
+                className={cn('group cursor-pointer rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm transition-all hover:border-gray-200 hover:bg-gray-50/70 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#FF6321]/30', task.status === 'completed' && 'opacity-60')}
+              >
                 <div className="flex items-start gap-5">
-                <button onClick={() => cycleStatus(task)} className={cn('mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border-2 transition-all', task.status === 'completed' ? 'bg-[#00c875] border-[#00c875] text-white' : 'border-gray-100 text-transparent hover:border-gray-900 hover:text-gray-900')}>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    cycleStatus(task);
+                  }}
+                  className={cn('mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border-2 transition-all', task.status === 'completed' ? 'bg-[#00c875] border-[#00c875] text-white' : 'border-gray-100 text-transparent hover:border-gray-900 hover:text-gray-900')}
+                  title="Move task to next status"
+                >
                   <CheckCircle2 size={20} />
                 </button>
                 <div className="flex-1 min-w-0">
@@ -440,8 +463,28 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
                     <Badge value={uiTaskStatus(task.status)} type="status" />
                   </div>
                   <div className="flex items-center overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
-                  <button onClick={() => openTaskDetails(task)} className="p-3 text-gray-400 transition-all hover:text-gray-900" title="Open task details"><MoreVertical size={18} /></button>
-                  {canManage && <button onClick={() => deleteTask(task)} className="p-3 text-gray-400 hover:text-red-500 transition-all"><Trash2 size={18} /></button>}
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openTaskDetails(task);
+                    }}
+                    className="px-4 py-3 text-xs font-bold uppercase tracking-widest text-gray-400 transition-all hover:text-gray-900"
+                    title="Open task details"
+                  >
+                    Open details
+                  </button>
+                  {canManage && (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteTask(task);
+                      }}
+                      className="p-3 text-gray-400 hover:text-red-500 transition-all"
+                      title="Delete task"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
                   </div>
                 </div>
                 </div>
@@ -558,10 +601,22 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
 
 function TaskCard({ task, projects, workers, onCycle, onEdit, onDelete, canManage }: { task: Task; projects: Project[]; workers: LaravelUser[]; onCycle: () => void; onEdit: () => void; onDelete: () => void; canManage: boolean }) {
   return (
-    <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100 hover:border-[#FF6321] transition-all group">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onEdit}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onEdit();
+        }
+      }}
+      className="group cursor-pointer rounded-3xl border border-gray-100 bg-gray-50 p-5 transition-all hover:border-[#FF6321] hover:bg-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#FF6321]/30"
+    >
       <div className="flex justify-between items-start mb-3">
         <Badge value={uiTaskPriority(task.priority)} type="priority" />
-        <button onClick={onEdit} className="text-gray-300 hover:text-gray-900"><MoreVertical size={14} /></button>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-300 transition-all group-hover:text-[#FF6321]">Open</span>
       </div>
       <h5 className="text-sm font-bold text-gray-900 mb-2">{task.title}</h5>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{projects.find((project) => project.id === task.project_id)?.name || 'General'}</p>
@@ -573,8 +628,27 @@ function TaskCard({ task, projects, workers, onCycle, onEdit, onDelete, canManag
         <span className="text-[10px] font-bold text-gray-400">{task.due_at ? formatDate(task.due_at) : 'No date'}</span>
       </div>
       <div className="flex gap-2 mt-4">
-        <button onClick={onCycle} className="flex-1 py-2 bg-white rounded-xl text-[10px] font-bold text-gray-500 hover:text-gray-900">Next Status</button>
-        {canManage && <button onClick={onDelete} className="px-3 py-2 bg-white rounded-xl text-red-400 hover:text-red-600"><Trash2 size={14} /></button>}
+        <button
+          onClick={(event) => {
+            event.stopPropagation();
+            onCycle();
+          }}
+          className="flex-1 py-2 bg-white rounded-xl text-[10px] font-bold text-gray-500 hover:text-gray-900"
+        >
+          Next Status
+        </button>
+        {canManage && (
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            className="px-3 py-2 bg-white rounded-xl text-red-400 hover:text-red-600"
+            title="Delete task"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
     </div>
   );
