@@ -41,7 +41,7 @@ if ($LASTEXITCODE -gt 7) {
 
 Push-Location $appOut
 try {
-    composer install --no-dev --optimize-autoloader --no-interaction
+    composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 }
 finally {
     Pop-Location
