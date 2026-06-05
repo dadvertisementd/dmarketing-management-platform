@@ -26,6 +26,7 @@ import {
   uiTaskPriority,
   uiTaskStatus,
 } from '../lib/laravelApi';
+import { avatarStyleForUser, userInitial } from '../lib/avatar';
 import { cn, formatDate } from '../lib/utils';
 
 interface TasksViewProps {
@@ -39,6 +40,7 @@ const emptyTask = {
   priority: 'medium',
   status: 'todo',
   projectId: '',
+  clientId: '',
   assigneeId: '',
   dueDate: new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10),
 };
@@ -64,6 +66,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newCommentBody, setNewCommentBody] = useState('');
+  const [collaborationSaving, setCollaborationSaving] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -96,6 +99,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
     setSelectedFiles([]);
     setNewSubtaskTitle('');
     setNewCommentBody('');
+    setError(null);
     onModalClose?.();
   };
 
@@ -104,6 +108,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
     setSelectedFiles([]);
     setNewSubtaskTitle('');
     setNewCommentBody('');
+    setCollaborationSaving(false);
+    setError(null);
   };
 
   const taskFormValue = editingTask
@@ -113,6 +119,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
       priority: uiTaskPriority(editingTask.priority),
       status: uiTaskStatus(editingTask.status),
       projectId: editingTask.project_id ? String(editingTask.project_id) : '',
+      clientId: editingTask.client_id ? String(editingTask.client_id) : '',
       assigneeId: editingTask.assigned_to ? String(editingTask.assigned_to) : '',
       dueDate: editingTask.due_at ? editingTask.due_at.slice(0, 10) : '',
     }
@@ -127,6 +134,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
         priority: patch.priority ? apiTaskPriority(patch.priority) : editingTask.priority,
         status: patch.status ? apiTaskStatus(patch.status) : editingTask.status,
         project_id: patch.projectId !== undefined ? Number(patch.projectId) || null : editingTask.project_id,
+        client_id: patch.clientId !== undefined ? Number(patch.clientId) || null : editingTask.client_id,
         assigned_to: patch.assigneeId !== undefined ? Number(patch.assigneeId) || null : editingTask.assigned_to,
         due_at: patch.dueDate !== undefined ? patch.dueDate || null : editingTask.due_at,
       });
@@ -136,11 +144,16 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
   };
 
   const selectedProject = projects.find((project) => String(project.id) === taskFormValue.projectId);
-  const defaultClientId = selectedProject?.client_id ?? clients[0]?.id;
+  const selectedClientId = Number(taskFormValue.clientId) || undefined;
+  const defaultClientId = selectedProject?.client_id ?? selectedClientId ?? clients[0]?.id;
 
   const saveTask = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!taskFormValue.title.trim()) return;
+    if (!defaultClientId && !editingTask) {
+      setError('Choose a client before creating this task.');
+      return;
+    }
     if (!canManage && !editingTask) {
       setError('Only managers and admins can create tasks.');
       return;
@@ -169,8 +182,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
           updated = { ...updated, attachments };
         }
         syncTask(updated);
-        setSelectedFiles([]);
-        setEditingTask(updated);
+        closeEditingTask();
       } else {
         const created = await laravelApi.createTask({
           title: taskFormValue.title,
@@ -218,6 +230,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
     setSelectedFiles([]);
     setNewSubtaskTitle('');
     setNewCommentBody('');
+    setError(null);
   };
 
   const syncTask = (task: Task) => {
@@ -227,34 +240,70 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
 
   const addSubtask = async () => {
     if (!editingTask || !newSubtaskTitle.trim()) return;
-    const subtask = await laravelApi.createTaskSubtask(editingTask.id, { title: newSubtaskTitle.trim() });
-    syncTask({ ...editingTask, subtasks: [...(editingTask.subtasks || []), subtask] });
-    setNewSubtaskTitle('');
+    setCollaborationSaving(true);
+    setError(null);
+
+    try {
+      const subtask = await laravelApi.createTaskSubtask(editingTask.id, { title: newSubtaskTitle.trim() });
+      syncTask({ ...editingTask, subtasks: [...(editingTask.subtasks || []), subtask] });
+      setNewSubtaskTitle('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to add checklist item.');
+    } finally {
+      setCollaborationSaving(false);
+    }
   };
 
   const toggleSubtask = async (subtaskId: number, isCompleted: boolean) => {
     if (!editingTask) return;
-    const subtask = await laravelApi.updateTaskSubtask(editingTask.id, subtaskId, { is_completed: isCompleted });
-    syncTask({
-      ...editingTask,
-      subtasks: (editingTask.subtasks || []).map((item) => item.id === subtask.id ? subtask : item),
-    });
+    setCollaborationSaving(true);
+    setError(null);
+
+    try {
+      const subtask = await laravelApi.updateTaskSubtask(editingTask.id, subtaskId, { is_completed: isCompleted });
+      syncTask({
+        ...editingTask,
+        subtasks: (editingTask.subtasks || []).map((item) => item.id === subtask.id ? subtask : item),
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to update checklist item.');
+    } finally {
+      setCollaborationSaving(false);
+    }
   };
 
   const deleteSubtask = async (subtaskId: number) => {
     if (!editingTask) return;
-    await laravelApi.deleteTaskSubtask(editingTask.id, subtaskId);
-    syncTask({
-      ...editingTask,
-      subtasks: (editingTask.subtasks || []).filter((item) => item.id !== subtaskId),
-    });
+    setCollaborationSaving(true);
+    setError(null);
+
+    try {
+      await laravelApi.deleteTaskSubtask(editingTask.id, subtaskId);
+      syncTask({
+        ...editingTask,
+        subtasks: (editingTask.subtasks || []).filter((item) => item.id !== subtaskId),
+      });
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete checklist item.');
+    } finally {
+      setCollaborationSaving(false);
+    }
   };
 
   const addComment = async () => {
     if (!editingTask || !newCommentBody.trim()) return;
-    const comment = await laravelApi.createTaskComment(editingTask.id, { body: newCommentBody.trim() });
-    syncTask({ ...editingTask, comments: [comment, ...(editingTask.comments || [])] });
-    setNewCommentBody('');
+    setCollaborationSaving(true);
+    setError(null);
+
+    try {
+      const comment = await laravelApi.createTaskComment(editingTask.id, { body: newCommentBody.trim() });
+      syncTask({ ...editingTask, comments: [comment, ...(editingTask.comments || [])] });
+      setNewCommentBody('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to add comment.');
+    } finally {
+      setCollaborationSaving(false);
+    }
   };
 
   const filteredTasks = useMemo(() => tasks.filter((task) => {
@@ -392,17 +441,32 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
         {(isAddTaskOpen || editingTask) && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl">
-              <div className="p-8 border-b border-gray-50">
-                <h3 className="text-2xl font-serif font-bold italic">{editingTask ? 'Edit Task' : 'Create New Task'}</h3>
-                {editingTask && <p className="mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">Task detail, files, subtasks, and discussion</p>}
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-6 border-b border-gray-50 bg-white p-8">
+                <div>
+                  <h3 className="text-2xl font-serif font-bold italic">{editingTask ? 'Edit Task' : 'Create New Task'}</h3>
+                  {editingTask && <p className="mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">Task detail, files, subtasks, and discussion</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => editingTask ? closeEditingTask() : handleCloseModal()}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition-all hover:bg-gray-900 hover:text-white"
+                  aria-label="Close task modal"
+                  disabled={isSaving}
+                >
+                  <X size={18} />
+                </button>
               </div>
               <form onSubmit={saveTask} className="p-8 space-y-6">
+                {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-100">{error}</div>}
                 <Input label="Title" value={taskFormValue.title} onChange={(value) => updateTaskForm({ title: value })} disabled={isSaving || (!!editingTask && !canManage)} />
                 <Textarea label="Description" value={taskFormValue.description} onChange={(value) => updateTaskForm({ description: value })} disabled={isSaving || (!!editingTask && !canManage)} />
                 <div className="grid grid-cols-2 gap-4">
                   <Select label="Assign To" value={taskFormValue.assigneeId} onChange={(value) => updateTaskForm({ assigneeId: value })} disabled={isSaving || !canManage} options={[{ value: '', label: 'Unassigned' }, ...workers.map((worker) => ({ value: String(worker.id), label: worker.name }))]} />
-                  <Select label="Project" value={taskFormValue.projectId} onChange={(value) => updateTaskForm({ projectId: value })} disabled={isSaving || !!editingTask} options={[{ value: '', label: 'General' }, ...projects.map((project) => ({ value: String(project.id), label: project.name }))]} />
+                  <Select label="Project / Workstream" value={taskFormValue.projectId} onChange={(value) => updateTaskForm({ projectId: value, clientId: '' })} disabled={isSaving || !!editingTask} options={[{ value: '', label: 'No project / daily client task' }, ...projects.map((project) => ({ value: String(project.id), label: project.name }))]} />
                 </div>
+                {!selectedProject && !editingTask && (
+                  <Select label="Client" value={taskFormValue.clientId} onChange={(value) => updateTaskForm({ clientId: value })} disabled={isSaving} options={[{ value: '', label: clients.length === 0 ? 'Create a client first' : 'Select client' }, ...clients.map((client) => ({ value: String(client.id), label: client.name }))]} />
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Due Date" type="date" value={taskFormValue.dueDate} onChange={(value) => updateTaskForm({ dueDate: value })} disabled={isSaving || (!!editingTask && !canManage)} />
                   <Select label="Priority" value={taskFormValue.priority} onChange={(value) => updateTaskForm({ priority: value })} disabled={isSaving || !canManage} options={['low', 'medium', 'high', 'urgent'].map((value) => ({ value, label: value }))} />
@@ -414,6 +478,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
                   <TaskCollaborationPanel
                     task={editingTask}
                     currentUserName={user?.displayName || 'You'}
+                    currentUserAvatar={user ? { id: user.id, name: user.displayName, email: user.email, avatar_color: user.avatarColor } : null}
                     subtaskTitle={newSubtaskTitle}
                     commentBody={newCommentBody}
                     onSubtaskTitleChange={setNewSubtaskTitle}
@@ -422,6 +487,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
                     onToggleSubtask={toggleSubtask}
                     onDeleteSubtask={deleteSubtask}
                     onAddComment={addComment}
+                    isSaving={collaborationSaving}
                   />
                 )}
                 <div className="flex gap-4 pt-4">
@@ -491,6 +557,7 @@ function TaskSignals({ task }: { task: Task }) {
 function TaskCollaborationPanel({
   task,
   currentUserName,
+  currentUserAvatar,
   subtaskTitle,
   commentBody,
   onSubtaskTitleChange,
@@ -499,9 +566,11 @@ function TaskCollaborationPanel({
   onToggleSubtask,
   onDeleteSubtask,
   onAddComment,
+  isSaving,
 }: {
   task: Task;
   currentUserName: string;
+  currentUserAvatar: Pick<LaravelUser, 'id' | 'name' | 'email' | 'avatar_color'> | null;
   subtaskTitle: string;
   commentBody: string;
   onSubtaskTitleChange: (value: string) => void;
@@ -510,11 +579,14 @@ function TaskCollaborationPanel({
   onToggleSubtask: (subtaskId: number, isCompleted: boolean) => void;
   onDeleteSubtask: (subtaskId: number) => void;
   onAddComment: () => void;
+  isSaving: boolean;
 }) {
   const subtasks = task.subtasks || [];
   const comments = task.comments || [];
   const completedSubtasks = subtasks.filter((subtask) => subtask.is_completed).length;
   const progress = subtasks.length > 0 ? Math.round((completedSubtasks / subtasks.length) * 100) : 0;
+  const canAddSubtask = subtaskTitle.trim().length > 0 && !isSaving;
+  const canAddComment = commentBody.trim().length > 0 && !isSaving;
 
   return (
     <div className="space-y-6 rounded-[2rem] border border-gray-100 bg-gray-50/60 p-5">
@@ -539,12 +611,13 @@ function TaskCollaborationPanel({
               <button
                 type="button"
                 onClick={() => onToggleSubtask(subtask.id, !subtask.is_completed)}
+                disabled={isSaving}
                 className={cn('flex h-6 w-6 items-center justify-center rounded-lg border text-white transition-all', subtask.is_completed ? 'border-[#00c875] bg-[#00c875]' : 'border-gray-200 bg-white text-transparent hover:border-gray-900 hover:text-gray-900')}
               >
                 <CheckCircle2 size={15} />
               </button>
               <span className={cn('flex-1 text-sm font-bold text-gray-700', subtask.is_completed && 'text-gray-400 line-through')}>{subtask.title}</span>
-              <button type="button" onClick={() => onDeleteSubtask(subtask.id)} className="text-gray-300 transition-all hover:text-red-500">
+              <button type="button" onClick={() => onDeleteSubtask(subtask.id)} disabled={isSaving} className="text-gray-300 transition-all hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -556,15 +629,16 @@ function TaskCollaborationPanel({
             value={subtaskTitle}
             onChange={(event) => onSubtaskTitleChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.key === 'Enter' && canAddSubtask) {
                 event.preventDefault();
                 onAddSubtask();
               }
             }}
             placeholder="Type to add a subtask..."
+            disabled={isSaving}
             className="min-w-0 flex-1 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-gray-900"
           />
-          <button type="button" onClick={onAddSubtask} className="rounded-2xl bg-gray-900 px-4 py-3 text-sm font-bold text-white">
+          <button type="button" onClick={onAddSubtask} disabled={!canAddSubtask} className="rounded-2xl bg-gray-900 px-4 py-3 text-sm font-bold text-white transition-all disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400">
             <Plus size={16} />
           </button>
         </div>
@@ -574,16 +648,19 @@ function TaskCollaborationPanel({
         <h4 className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-900"><MessageSquare size={16} /> Comments & activity</h4>
         <div className="space-y-3">
           <div className="flex gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white">{currentUserName.charAt(0).toUpperCase()}</div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={avatarStyleForUser(currentUserAvatar)}>
+              {userInitial(currentUserName)}
+            </div>
             <div className="flex-1">
               <textarea
                 value={commentBody}
                 onChange={(event) => onCommentBodyChange(event.target.value)}
                 placeholder="Add a comment or update..."
+                disabled={isSaving}
                 className="h-20 w-full rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-gray-900"
               />
               <div className="mt-2 flex justify-end">
-                <button type="button" onClick={onAddComment} className="inline-flex items-center gap-2 rounded-2xl bg-[#FF6321] px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-100">
+                <button type="button" onClick={onAddComment} disabled={!canAddComment} className="inline-flex items-center gap-2 rounded-2xl bg-[#FF6321] px-4 py-2 text-xs font-bold text-white shadow-lg shadow-orange-100 transition-all disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none">
                   <Send size={14} />
                   Comment
                 </button>
@@ -592,7 +669,9 @@ function TaskCollaborationPanel({
           </div>
           {comments.map((comment) => (
             <div key={comment.id} className="flex gap-3 rounded-2xl bg-white p-4 ring-1 ring-gray-100">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-bold text-white">{(comment.user?.name || 'U').charAt(0).toUpperCase()}</div>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={avatarStyleForUser(comment.user)}>
+                {userInitial(comment.user?.name)}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-bold text-gray-900">{comment.user?.name || 'Unknown user'}</span>

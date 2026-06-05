@@ -56,19 +56,69 @@ class WorkspaceController extends Controller
         return response()->json($query->get());
     }
 
+    public function storeClient(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'industry' => ['nullable', 'string', 'max:255'],
+            'contact_name' => ['nullable', 'string', 'max:255'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
+            'status' => ['nullable', 'in:active,onboarding,paused,inactive'],
+        ]);
+
+        $client = Client::create($data + ['status' => 'active']);
+
+        return response()->json($client, 201);
+    }
+
+    public function updateClient(Request $request, Client $client): JsonResponse
+    {
+        abort_unless($this->canAccessClient($request, $client->id), 403);
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'industry' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'contact_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'contact_email' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'status' => ['sometimes', 'in:active,onboarding,paused,inactive'],
+        ]);
+
+        $client->update($data);
+
+        return response()->json($client->fresh());
+    }
+
+    public function destroyClient(Request $request, Client $client): JsonResponse
+    {
+        abort_unless($this->canAccessClient($request, $client->id), 403);
+
+        $hasLinkedWork = $client->projects()->exists()
+            || $client->tasks()->exists()
+            || $client->socialPosts()->exists()
+            || $client->sharedFiles()->exists();
+
+        if ($hasLinkedWork) {
+            abort(422, 'This client has linked work. Set the client status to inactive instead of deleting it.');
+        }
+
+        $client->delete();
+
+        return response()->json(['message' => 'Client deleted.']);
+    }
+
     public function projects(Request $request): JsonResponse
     {
-        return response()->json($this->visibleProjects($request)->latest()->get());
+        return response()->json($this->visibleProjects($request)->with($this->projectRelations())->latest()->get());
     }
 
     public function projectsWorkspace(Request $request): JsonResponse
     {
         return response()->json([
-            'projects' => $this->visibleProjects($request)->latest()->get(),
+            'projects' => $this->visibleProjects($request)->with($this->projectRelations())->latest()->get(),
             'clients' => $this->visibleClients($request)->latest()->get(),
             'tasks' => $this->visibleTasks($request)->with($this->taskRelations())->orderBy('due_at')->get(),
             'team' => $request->user()->isManager()
-                ? $this->agencyTeamQuery()->get(['id', 'name', 'email', 'role', 'title', 'weekly_capacity', 'is_active', 'created_at', 'updated_at'])
+                ? $this->agencyTeamQuery()->get($this->teamMemberColumns())
                 : [],
         ]);
     }
@@ -76,7 +126,7 @@ class WorkspaceController extends Controller
     public function teamMembers(): JsonResponse
     {
         return response()->json($this->agencyTeamQuery()
-            ->get(['id', 'name', 'email', 'role', 'title', 'weekly_capacity', 'is_active', 'created_at', 'updated_at']));
+            ->get($this->teamMemberColumns()));
     }
 
     public function storeUser(Request $request): JsonResponse
@@ -89,6 +139,7 @@ class WorkspaceController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
             'weekly_capacity' => ['nullable', 'integer', 'min:1', 'max:80'],
             'is_active' => ['sometimes', 'boolean'],
+            'avatar_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         $user = User::create($data + ['weekly_capacity' => 40, 'is_active' => true]);
@@ -106,6 +157,7 @@ class WorkspaceController extends Controller
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'weekly_capacity' => ['sometimes', 'integer', 'min:1', 'max:80'],
             'is_active' => ['sometimes', 'boolean'],
+            'avatar_color' => ['sometimes', 'nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         if (($data['is_active'] ?? true) === false && $user->id === $request->user()->id) {
@@ -175,7 +227,7 @@ class WorkspaceController extends Controller
         $project = Project::create($data + ['manager_id' => $request->user()->id, 'type' => 'marketing', 'progress' => 0]);
         $this->syncProjectMembers($project, array_unique(array_filter([...$memberIds, $project->manager_id])));
 
-        return response()->json($project->fresh(), 201);
+        return response()->json($project->fresh($this->projectRelations()), 201);
     }
 
     public function updateProject(Request $request, Project $project): JsonResponse
@@ -214,7 +266,7 @@ class WorkspaceController extends Controller
             $this->syncProjectMembers($project, array_unique(array_filter([...$memberIds, $project->manager_id])));
         }
 
-        return response()->json($project->fresh());
+        return response()->json($project->fresh($this->projectRelations()));
     }
 
     public function destroyProject(Request $request, Project $project): JsonResponse
@@ -606,7 +658,10 @@ class WorkspaceController extends Controller
 
     public function chatMessages(Request $request): JsonResponse
     {
-        $query = ChatMessage::query()->latest()->limit(100);
+        $query = ChatMessage::query()
+            ->with('user:id,name,email,role,title,avatar_color')
+            ->latest()
+            ->limit(100);
 
         if (! $request->user()->isAgencyMember()) {
             $clientId = Client::where('portal_user_id', $request->user()->id)->value('id');
@@ -633,7 +688,8 @@ class WorkspaceController extends Controller
 
         $this->authorizeProjectClientPair($request, $data['project_id'] ?? null, $data['client_id'] ?? null);
 
-        $message = ChatMessage::create($data + ['user_id' => $request->user()->id]);
+        $message = ChatMessage::create($data + ['user_id' => $request->user()->id])
+            ->load('user:id,name,email,role,title,avatar_color');
 
         ChatMessageCreated::dispatch($message);
 
@@ -876,7 +932,25 @@ class WorkspaceController extends Controller
         return [
             'attachments',
             'subtasks',
-            'comments.user:id,name,email,role,title',
+            'comments.user:id,name,email,role,title,avatar_color',
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function teamMemberColumns(): array
+    {
+        return ['id', 'name', 'email', 'role', 'title', 'weekly_capacity', 'is_active', 'avatar_color', 'created_at', 'updated_at'];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function projectRelations(): array
+    {
+        return [
+            'users:id,name,email,role,title,avatar_color',
         ];
     }
 

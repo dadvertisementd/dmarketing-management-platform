@@ -32,6 +32,7 @@ class UserFactory extends Factory
             'role' => 'client',
             'weekly_capacity' => 40,
             'is_active' => true,
+            'avatar_color' => fake()->randomElement(['#0f172a', '#ff6321', '#2563eb', '#7c3aed', '#db2777', '#059669']),
             'remember_token' => Str::random(10),
         ];
     }

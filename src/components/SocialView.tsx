@@ -22,7 +22,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subMonths, subWeeks } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
-import { Client, PostingCheckStatus, PostingTrackerClient, PostingTrackerDay, PostingTrackerResponse, Project, SocialPost, apiStatus, laravelApi, uiStatus } from '../lib/laravelApi';
+import { Client, PostingCheckStatus, PostingTrackerClient, PostingTrackerDay, PostingTrackerResponse, Project, SocialPost, SocialStatus, laravelApi, uiStatus } from '../lib/laravelApi';
 import { generateContentSuggestions } from '../lib/gemini';
 import { cn, formatDate } from '../lib/utils';
 
@@ -63,6 +63,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ forceShowModal, onModalC
   const [scheduleDraft, setScheduleDraft] = useState<Record<number, boolean>>({});
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [activePostAnalytics, setActivePostAnalytics] = useState<SocialPost | null>(null);
+  const [updatingPostId, setUpdatingPostId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -161,10 +162,21 @@ export const SocialView: React.FC<SocialViewProps> = ({ forceShowModal, onModalC
     }
   };
 
-  const updateStatus = async (post: SocialPost, status: string) => {
-    const updated = await laravelApi.updateSocialPost(post.id, { status: apiStatus(status) as any });
-    setPosts((items) => items.map((item) => item.id === post.id ? updated : item));
+  const updateStatus = async (post: SocialPost, status: SocialStatus) => {
+    setUpdatingPostId(post.id);
+    setError(null);
+
+    try {
+      const updated = await laravelApi.updateSocialPost(post.id, { status });
+      setPosts((items) => items.map((item) => item.id === post.id ? updated : item));
+    } catch (err: any) {
+      setError(err.message || 'Failed to update social post status.');
+    } finally {
+      setUpdatingPostId(null);
+    }
   };
+
+  const isUpdatingPost = (post: SocialPost) => updatingPostId === post.id;
 
   const deletePost = async (post: SocialPost) => {
     if (!canCreate) return;
@@ -289,8 +301,8 @@ export const SocialView: React.FC<SocialViewProps> = ({ forceShowModal, onModalC
                 <p className="text-sm text-gray-500 mb-8 flex-1 leading-relaxed line-clamp-4">{post.content}</p>
                 {canApprove && (post.status === 'draft' || post.status === 'review' || post.status === 'pending_agency_approval') && (
                   <div className="flex gap-2 mb-6 p-2 bg-amber-50 rounded-2xl border border-amber-100">
-                    <button onClick={() => updateStatus(post, 'pending-client-review')} className="flex-1 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-black transition-all flex items-center justify-center gap-1.5"><Send size={12} /> Client Review</button>
-                    <button onClick={() => updateStatus(post, 'needs-revision')} className="flex-1 py-2 bg-white text-gray-600 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-amber-200 hover:bg-gray-50 transition-all flex items-center justify-center gap-1.5"><X size={12} /> Revision</button>
+                    <button disabled={isUpdatingPost(post)} onClick={() => updateStatus(post, 'pending_client_review')} className="flex-1 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider hover:bg-black transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"><Send size={12} /> {isUpdatingPost(post) ? 'Sending...' : 'Client Review'}</button>
+                    <button disabled={isUpdatingPost(post)} onClick={() => updateStatus(post, 'needs_revision')} className="flex-1 py-2 bg-white text-gray-600 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-amber-200 hover:bg-gray-50 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"><X size={12} /> {isUpdatingPost(post) ? 'Requesting...' : 'Revision'}</button>
                   </div>
                 )}
                 <div className="pt-6 border-t border-gray-100 flex items-center justify-between">

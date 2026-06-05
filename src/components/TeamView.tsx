@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Mail, Plus, ShieldCheck, Trash2, UserCog, Users, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { LaravelUser, UserRole, laravelApi } from '../lib/laravelApi';
+import { avatarPalette, avatarStyleForUser, userInitial } from '../lib/avatar';
 import { cn } from '../lib/utils';
 
 const defaultMember = {
@@ -12,12 +13,15 @@ const defaultMember = {
   role: 'worker' as UserRole,
   title: '',
   weekly_capacity: 40,
+  avatar_color: avatarPalette[0],
 };
 
 const permissionRoles: UserRole[] = ['worker', 'manager', 'admin'];
 
 const teamPositions = [
   'Graphic Designer',
+  'Marketing Manager',
+  'Marketing Specialist',
   'Social Media Manager',
   'Video Editor',
   'Developer',
@@ -188,10 +192,11 @@ export const TeamView: React.FC<TeamViewProps> = ({ forceShowModal, onModalClose
           <div className="py-20 text-center text-gray-400">Loading team...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left">
+            <table className="w-full min-w-[980px] text-left">
               <thead>
                 <tr className="border-b border-gray-100 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                   <th className="px-4 pb-4">Member</th>
+                  <th className="px-4 pb-4">Avatar</th>
                   <th className="px-4 pb-4">Access Role</th>
                   <th className="px-4 pb-4">Team Position</th>
                   <th className="px-4 pb-4">Capacity</th>
@@ -206,14 +211,21 @@ export const TeamView: React.FC<TeamViewProps> = ({ forceShowModal, onModalClose
                     <tr key={member.id} className="group hover:bg-gray-50/70 transition-all">
                       <td className="px-4 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-11 h-11 rounded-2xl bg-gray-900 text-white flex items-center justify-center font-serif italic font-bold">
-                            {member.name[0]}
+                          <div className="w-11 h-11 rounded-2xl text-white flex items-center justify-center font-serif italic font-bold shadow-sm" style={avatarStyleForUser(member)}>
+                            {userInitial(member.name)}
                           </div>
                           <div>
                             <p className="font-bold text-gray-900">{member.name}</p>
                             <p className="text-xs text-gray-400">{member.email}</p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-5">
+                        <ColorPicker
+                          value={member.avatar_color || ''}
+                          disabled={disabled}
+                          onChange={(color) => updateMember(member, { avatar_color: color })}
+                        />
                       </td>
                       <td className="px-4 py-5">
                         <select disabled={disabled} value={member.role} onChange={(event) => updateMember(member, { role: event.target.value as UserRole })} className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-widest text-gray-600 outline-none disabled:opacity-60">
@@ -283,6 +295,10 @@ export const TeamView: React.FC<TeamViewProps> = ({ forceShowModal, onModalClose
                   <Input label="Capacity" type="number" value={String(newMember.weekly_capacity)} onChange={(value) => setNewMember({ ...newMember, weekly_capacity: Number(value) })} />
                 </div>
                 <Select label="Team Position" value={newMember.title} onChange={(value) => setNewMember({ ...newMember, title: value })} options={teamPositions} placeholder="Select position" />
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Avatar Color</label>
+                  <ColorPicker value={newMember.avatar_color} onChange={(color) => setNewMember({ ...newMember, avatar_color: color })} />
+                </div>
                 <div className="rounded-2xl bg-gray-50 p-4 text-xs leading-relaxed text-gray-500">
                   <strong className="text-gray-900">Access Role</strong> controls permissions. <strong className="text-gray-900">Team Position</strong> describes their work, for example Graphic Designer, Social Media Manager, Video Editor, or Developer.
                 </div>
@@ -333,6 +349,31 @@ function Select({ label, value, onChange, options, placeholder }: { label: strin
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
+    </div>
+  );
+}
+
+function ColorPicker({ value, onChange, disabled = false }: { value?: string | null; onChange: (color: string) => void; disabled?: boolean }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {avatarPalette.map((color) => {
+        const selected = value === color;
+
+        return (
+          <button
+            key={color}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(color)}
+            className={cn(
+              'h-7 w-7 rounded-xl border-2 transition-all disabled:cursor-not-allowed disabled:opacity-50',
+              selected ? 'border-gray-900 ring-2 ring-gray-200' : 'border-white hover:scale-110',
+            )}
+            style={{ backgroundColor: color }}
+            aria-label={`Use avatar color ${color}`}
+          />
+        );
+      })}
     </div>
   );
 }

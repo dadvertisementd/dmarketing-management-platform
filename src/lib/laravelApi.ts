@@ -24,6 +24,7 @@ export interface LaravelUser {
   title?: string | null;
   weekly_capacity?: number;
   is_active?: boolean;
+  avatar_color?: string | null;
 }
 
 export interface Client {
@@ -42,6 +43,7 @@ export interface Project {
   id: number;
   client_id: number;
   manager_id?: number | null;
+  users?: Pick<LaravelUser, 'id' | 'name' | 'email' | 'role' | 'title' | 'avatar_color'>[];
   name: string;
   type?: string | null;
   status: ProjectStatus;
@@ -81,7 +83,7 @@ export interface TaskComment {
   task_id: number;
   user_id?: number | null;
   body: string;
-  user?: Pick<LaravelUser, 'id' | 'name' | 'email' | 'role' | 'title'> | null;
+  user?: Pick<LaravelUser, 'id' | 'name' | 'email' | 'role' | 'title' | 'avatar_color'> | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -156,6 +158,7 @@ export interface ChatMessage {
   project_id?: number | null;
   client_id?: number | null;
   user_id: number;
+  user?: Pick<LaravelUser, 'id' | 'name' | 'email' | 'role' | 'title' | 'avatar_color'> | null;
   message: string;
   created_at?: string;
   updated_at?: string;
@@ -281,6 +284,34 @@ export function downloadUrl(fileId: number | string): string {
   return `${API_URL}/api/files/${fileId}/download`;
 }
 
+export async function fetchSharedFileBlob(fileId: number | string): Promise<Blob> {
+  const response = await fetch(downloadUrl(fileId), {
+    credentials: 'include',
+    headers: { Accept: '*/*' },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Download failed' }));
+    throw new Error(error.message || 'Download failed');
+  }
+
+  return response.blob();
+}
+
+export async function downloadSharedFile(file: Pick<SharedFile, 'id' | 'name'>): Promise<void> {
+  const blob = await fetchSharedFileBlob(file.id);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = file.name;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function taskAttachmentDownloadUrl(taskId: number | string, attachmentId: number | string): string {
   return `${API_URL}/api/tasks/${taskId}/attachments/${attachmentId}/download`;
 }
@@ -324,6 +355,8 @@ export const laravelApi = {
   postingTracker: (weekStart?: string) =>
     request<PostingTrackerResponse>(`/api/posting-tracker${weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : ''}`),
   files: () => request<SharedFile[]>('/api/files'),
+  downloadFile: downloadSharedFile,
+  fetchFileBlob: fetchSharedFileBlob,
   notifications: () => request<any[]>('/api/notifications'),
   teamPerformance: () => request<TeamPerformance[]>('/api/reports/team-performance'),
   integrations: () => request<any[]>('/api/integrations'),
@@ -335,7 +368,14 @@ export const laravelApi = {
   deleteUser: (id: number | string) =>
     request<{ message: string }>(`/api/users/${id}`, { method: 'DELETE' }),
 
-  createProject: (payload: Partial<Project> & { name: string; client_id: number }) =>
+  createClient: (payload: Partial<Client> & { name: string }) =>
+    request<Client>('/api/clients', { method: 'POST', body: JSON.stringify(payload) }),
+  updateClient: (id: number | string, payload: Partial<Client>) =>
+    request<Client>(`/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteClient: (id: number | string) =>
+    request<{ message: string }>(`/api/clients/${id}`, { method: 'DELETE' }),
+
+  createProject: (payload: Partial<Project> & { name: string; client_id: number; member_ids?: number[] }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(payload) }),
   updateProject: (id: number | string, payload: Partial<Project> & { member_ids?: number[] }) =>
     request<Project>(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

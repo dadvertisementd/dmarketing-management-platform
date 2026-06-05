@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             'password' => $seedPassword,
             'role' => 'admin',
             'title' => 'Agency Director',
+            'avatar_color' => '#0f172a',
         ]);
 
         $manager = User::query()->create([
@@ -42,6 +43,7 @@ class DatabaseSeeder extends Seeder
             'password' => $seedPassword,
             'role' => 'manager',
             'title' => 'Marketing Manager',
+            'avatar_color' => '#ff6321',
         ]);
 
         $designer = User::query()->create([
@@ -50,6 +52,7 @@ class DatabaseSeeder extends Seeder
             'password' => $seedPassword,
             'role' => 'worker',
             'title' => 'Graphic Designer',
+            'avatar_color' => '#7c3aed',
         ]);
 
         $clientUser = User::query()->create([
@@ -58,6 +61,7 @@ class DatabaseSeeder extends Seeder
             'password' => $seedPassword,
             'role' => 'client',
             'title' => 'Marketing Contact',
+            'avatar_color' => '#059669',
         ]);
 
         $client = Client::query()->create([

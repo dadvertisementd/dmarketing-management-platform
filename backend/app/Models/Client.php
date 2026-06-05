@@ -18,4 +18,24 @@ class Client extends Model
     {
         return $this->hasMany(PostingCheck::class);
     }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    public function socialPosts(): HasMany
+    {
+        return $this->hasMany(SocialPost::class);
+    }
+
+    public function sharedFiles(): HasMany
+    {
+        return $this->hasMany(SharedFile::class);
+    }
 }

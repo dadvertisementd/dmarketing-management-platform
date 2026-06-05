@@ -14,6 +14,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { Client, LaravelUser, Project, laravelApi } from '../lib/laravelApi';
+import { avatarStyleForUser, userInitial } from '../lib/avatar';
 import { cn, formatDate } from '../lib/utils';
 
 interface ProjectsViewProps {
@@ -27,8 +28,8 @@ const emptyProject = {
   description: '',
   status: 'active',
   clientId: '',
-  managerId: '',
-  type: 'marketing',
+  memberIds: [] as string[],
+  type: 'ongoing_social_media',
   startsAt: '',
   endsAt: '',
   progress: 0,
@@ -92,8 +93,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
       description: editingProject.description || '',
       status: editingProject.status,
       clientId: String(editingProject.client_id),
-      managerId: editingProject.manager_id ? String(editingProject.manager_id) : '',
-      type: editingProject.type || 'marketing',
+      memberIds: editingProject.users?.map((member) => String(member.id)) || [],
+      type: editingProject.type || 'ongoing_social_media',
       startsAt: editingProject.starts_at || '',
       endsAt: editingProject.ends_at || '',
       progress: editingProject.progress || 0,
@@ -108,7 +109,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
         description: patch.description ?? editingProject.description,
         status: (patch.status as Project['status']) ?? editingProject.status,
         client_id: patch.clientId !== undefined ? Number(patch.clientId) : editingProject.client_id,
-        manager_id: patch.managerId !== undefined ? Number(patch.managerId) || null : editingProject.manager_id,
+        users: patch.memberIds !== undefined ? team.filter((member) => patch.memberIds?.includes(String(member.id))) : editingProject.users,
         type: patch.type ?? editingProject.type,
         starts_at: patch.startsAt ?? editingProject.starts_at,
         ends_at: patch.endsAt ?? editingProject.ends_at,
@@ -136,7 +137,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
         description: formValue.description,
         status: formValue.status as Project['status'],
         client_id: Number(formValue.clientId),
-        manager_id: formValue.managerId ? Number(formValue.managerId) : null,
+        member_ids: formValue.memberIds.map((id) => Number(id)),
         type: formValue.type,
         starts_at: formValue.startsAt || null,
         ends_at: formValue.endsAt || null,
@@ -177,6 +178,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
   }), [clients, filterStatus, projects, searchTerm]);
 
   const getClientName = (project: Project) => clients.find((client) => client.id === project.client_id)?.name || 'No client';
+  const getProjectTeam = (project: Project) => project.users?.length
+    ? project.users.map((member) => member.name).join(', ')
+    : 'No team assigned';
   const projectTasks = selectedProject ? tasks.filter((task) => task.project_id === selectedProject.id) : [];
   const selectedProgress = selectedProject
     ? projectTasks.length
@@ -255,6 +259,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
               <p className="text-sm text-gray-400 font-medium mb-6 flex items-center gap-2 uppercase tracking-widest text-[10px]">
                 <Users size={14} className="text-[#FF6321]" /> Client: {getClientName(project)}
               </p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 line-clamp-1">Team: {getProjectTeam(project)}</p>
               <p className="text-sm text-gray-500 leading-relaxed line-clamp-3 mb-8 min-h-[4.5rem]">{project.description || 'No description provided.'}</p>
               <div className="pt-6 border-t border-gray-50 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-gray-300 uppercase tracking-wider">
@@ -272,7 +277,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl">
               <div className="p-8 border-b border-gray-50">
                 <h3 className="text-2xl font-serif font-bold italic">{editingProject ? 'Edit Project' : 'Create Project'}</h3>
               </div>
@@ -280,10 +285,21 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs border border-red-100">{error}</div>}
                 <Input label="Project Name" value={formValue.name} onChange={(value) => updateForm({ name: value })} disabled={isSaving} />
                 <Textarea label="Description" value={formValue.description} onChange={(value) => updateForm({ description: value })} disabled={isSaving} />
-                <div className="grid grid-cols-2 gap-4">
-                  <Select label="Client" value={formValue.clientId} onChange={(value) => updateForm({ clientId: value })} disabled={isSaving} options={[{ value: '', label: 'Select client' }, ...clients.map((client) => ({ value: String(client.id), label: client.name }))]} />
-                  <Select label="Manager" value={formValue.managerId} onChange={(value) => updateForm({ managerId: value })} disabled={isSaving} options={[{ value: '', label: 'Default' }, ...team.map((member) => ({ value: String(member.id), label: member.name }))]} />
-                </div>
+                <Select label="Client" value={formValue.clientId} onChange={(value) => updateForm({ clientId: value })} disabled={isSaving} options={[{ value: '', label: clients.length === 0 ? 'Create a client first' : 'Select client' }, ...clients.map((client) => ({ value: String(client.id), label: client.name }))]} />
+                <Select label="Workstream Type" value={formValue.type} onChange={(value) => updateForm({ type: value })} disabled={isSaving} options={[
+                  { value: 'ongoing_social_media', label: 'Ongoing social media management' },
+                  { value: 'campaign', label: 'Campaign' },
+                  { value: 'website', label: 'Website' },
+                  { value: 'branding', label: 'Branding' },
+                  { value: 'video_ads', label: 'Video ads' },
+                  { value: 'content_retainer', label: 'Content retainer' },
+                ]} />
+                <ProjectTeamPicker
+                  team={team}
+                  selectedIds={formValue.memberIds}
+                  onChange={(memberIds) => updateForm({ memberIds })}
+                  disabled={isSaving}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <Select label="Status" value={formValue.status} onChange={(value) => updateForm({ status: value })} disabled={isSaving} options={['briefing', 'active', 'in_progress', 'on_hold', 'completed'].map((value) => ({ value, label: value.replaceAll('_', ' ') }))} />
                   <Input label="Progress" type="number" value={String(formValue.progress)} onChange={(value) => updateForm({ progress: Number(value) })} disabled={isSaving} />
@@ -313,6 +329,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
                 </div>
                 <h2 className="text-4xl font-serif font-bold text-gray-900 mb-2">{selectedProject.name}</h2>
                 <p className="text-sm font-bold text-[#FF6321] uppercase tracking-widest mb-8">Client: {getClientName(selectedProject)}</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Team: {getProjectTeam(selectedProject)}</p>
                 <p className="text-gray-600 leading-relaxed italic border-l-2 border-gray-100 pl-6 text-sm mb-10">{selectedProject.description || 'No detailed description provided.'}</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
                   <DetailCard label="Progress" value={`${selectedProgress}%`} />
@@ -348,6 +365,53 @@ function DetailCard({ label, value }: { label: string; value: string }) {
     <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{label}</p>
       <p className="text-xl font-serif font-bold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function ProjectTeamPicker({ team, selectedIds, onChange, disabled }: { team: LaravelUser[]; selectedIds: string[]; onChange: (ids: string[]) => void; disabled?: boolean }) {
+  const toggle = (memberId: string) => {
+    if (disabled) return;
+    onChange(selectedIds.includes(memberId)
+      ? selectedIds.filter((id) => id !== memberId)
+      : [...selectedIds, memberId]);
+  };
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Project Team</label>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-300">{selectedIds.length} selected</span>
+      </div>
+      {team.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm font-medium text-gray-400">
+          Add agency team members first, then assign them to this client workstream.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {team.map((member) => {
+            const selected = selectedIds.includes(String(member.id));
+            return (
+              <button
+                type="button"
+                key={member.id}
+                onClick={() => toggle(String(member.id))}
+                disabled={disabled}
+                className={cn('flex items-center gap-3 rounded-2xl border p-4 text-left transition-all', selected ? 'border-gray-900 bg-gray-900 text-white shadow-lg shadow-gray-100' : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200 hover:bg-white')}
+              >
+                <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white shadow-sm', selected && 'ring-2 ring-white/20')} style={avatarStyleForUser(member)}>
+                  {userInitial(member.name)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold">{member.name}</span>
+                  <span className={cn('block truncate text-[10px] font-bold uppercase tracking-widest', selected ? 'text-white/60' : 'text-gray-400')}>{member.title || member.role}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-2 text-[11px] font-medium text-gray-400">For ongoing social media clients, assign the account lead plus the people doing design, copy, video, and development work.</p>
     </div>
   );
 }

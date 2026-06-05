@@ -11,6 +11,7 @@ export interface UserProfile {
   title?: string | null;
   weeklyCapacity?: number;
   isActive?: boolean;
+  avatarColor?: string | null;
 }
 
 interface AuthContextType {
@@ -54,6 +55,7 @@ function toProfile(user: LaravelUser): UserProfile {
     title: user.title,
     weeklyCapacity: user.weekly_capacity,
     isActive: user.is_active,
+    avatarColor: user.avatar_color,
   };
 }
 

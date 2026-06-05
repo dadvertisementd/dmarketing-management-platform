@@ -8,6 +8,7 @@ use App\Models\ClientPostingSchedule;
 use App\Models\Integration;
 use App\Models\PostingCheck;
 use App\Models\Project;
+use App\Models\SharedFile;
 use App\Models\SocialPost;
 use App\Models\Task;
 use App\Models\TaskAttachment;
@@ -193,16 +194,19 @@ class WorkspaceApiTest extends TestCase
                 'role' => 'worker',
                 'title' => 'Graphic Designer',
                 'weekly_capacity' => 35,
+                'avatar_color' => '#2563eb',
             ])
             ->assertCreated()
             ->assertJsonPath('name', 'New Designer')
             ->assertJsonPath('role', 'worker')
+            ->assertJsonPath('avatar_color', '#2563eb')
             ->assertJsonMissingPath('password');
 
         $this->assertDatabaseHas('users', [
             'email' => 'designer.new@example.com',
             'role' => 'worker',
             'title' => 'Graphic Designer',
+            'avatar_color' => '#2563eb',
         ]);
     }
 
@@ -274,6 +278,65 @@ class WorkspaceApiTest extends TestCase
             ->assertJsonPath('team.0.id', $manager->id);
     }
 
+    public function test_manager_can_create_client(): void
+    {
+        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+
+        $this->actingAs($manager)
+            ->postJson('/api/clients', [
+                'name' => 'Vatra Residence',
+                'industry' => 'Construction',
+                'contact_name' => 'Client Contact',
+                'contact_email' => 'client@example.com',
+                'status' => 'onboarding',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('name', 'Vatra Residence')
+            ->assertJsonPath('status', 'onboarding');
+
+        $this->assertDatabaseHas('clients', [
+            'name' => 'Vatra Residence',
+            'industry' => 'Construction',
+        ]);
+    }
+
+    public function test_client_with_linked_work_cannot_be_deleted(): void
+    {
+        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        $client = Client::create(['name' => 'Client With Work']);
+        Project::create(['client_id' => $client->id, 'name' => 'Ongoing Social Media']);
+
+        $this->actingAs($manager)
+            ->deleteJson("/api/clients/{$client->id}")
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('clients', ['id' => $client->id]);
+    }
+
+    public function test_manager_can_assign_multiple_team_members_to_project(): void
+    {
+        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        $designer = User::factory()->create(['role' => 'worker', 'title' => 'Graphic Designer', 'is_active' => true]);
+        $developer = User::factory()->create(['role' => 'worker', 'title' => 'Developer', 'is_active' => true]);
+        $client = Client::create(['name' => 'Vatra Residence']);
+
+        $this->actingAs($manager)
+            ->postJson('/api/projects', [
+                'client_id' => $client->id,
+                'name' => 'Ongoing Social Media Management',
+                'type' => 'ongoing_social_media',
+                'status' => 'active',
+                'member_ids' => [$designer->id, $developer->id],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('name', 'Ongoing Social Media Management')
+            ->assertJsonCount(3, 'users');
+
+        $this->assertDatabaseHas('project_user', ['user_id' => $manager->id]);
+        $this->assertDatabaseHas('project_user', ['user_id' => $designer->id]);
+        $this->assertDatabaseHas('project_user', ['user_id' => $developer->id]);
+    }
+
     public function test_chat_message_dispatches_realtime_event(): void
     {
         Event::fake([ChatMessageCreated::class]);
@@ -290,6 +353,54 @@ class WorkspaceApiTest extends TestCase
             ->assertCreated();
 
         Event::assertDispatched(ChatMessageCreated::class);
+    }
+
+    public function test_manager_can_send_social_post_to_client_review(): void
+    {
+        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        $client = Client::create(['name' => 'Client']);
+        $post = SocialPost::create([
+            'client_id' => $client->id,
+            'platform' => 'instagram',
+            'title' => 'Campaign draft',
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/social-posts/{$post->id}", [
+                'status' => 'pending_client_review',
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', 'pending_client_review');
+
+        $this->assertDatabaseHas('social_posts', [
+            'id' => $post->id,
+            'status' => 'pending_client_review',
+        ]);
+    }
+
+    public function test_manager_can_request_social_post_revision(): void
+    {
+        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        $client = Client::create(['name' => 'Client']);
+        $post = SocialPost::create([
+            'client_id' => $client->id,
+            'platform' => 'instagram',
+            'title' => 'Campaign draft',
+            'status' => 'review',
+        ]);
+
+        $this->actingAs($manager)
+            ->patchJson("/api/social-posts/{$post->id}", [
+                'status' => 'needs_revision',
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', 'needs_revision');
+
+        $this->assertDatabaseHas('social_posts', [
+            'id' => $post->id,
+            'status' => 'needs_revision',
+        ]);
     }
 
     public function test_client_cannot_post_chat_message_to_another_client(): void
@@ -353,6 +464,30 @@ class WorkspaceApiTest extends TestCase
                 'file' => UploadedFile::fake()->create('campaign.pdf', 100, 'application/pdf'),
             ])
             ->assertForbidden();
+    }
+
+    public function test_user_can_download_accessible_vault_file(): void
+    {
+        Storage::fake('local');
+        $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
+        $client = Client::create(['name' => 'Client One']);
+
+        Storage::disk('local')->put('shared-files/logo.png', 'logo-bytes');
+
+        $file = SharedFile::create([
+            'client_id' => $client->id,
+            'uploaded_by' => $manager->id,
+            'name' => 'logo.png',
+            'category' => 'logos',
+            'disk' => 'local',
+            'path' => 'shared-files/logo.png',
+            'mime_type' => 'image/png',
+            'size' => 10,
+        ]);
+
+        $this->actingAs($manager)
+            ->get("/api/files/{$file->id}/download")
+            ->assertOk();
     }
 
     public function test_integrations_endpoint_does_not_expose_secret_configuration(): void

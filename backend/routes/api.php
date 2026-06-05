@@ -8,6 +8,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/dashboard', [WorkspaceController::class, 'dashboard']);
     Route::get('/clients', [WorkspaceController::class, 'clients']);
+    Route::post('/clients', [WorkspaceController::class, 'storeClient'])->middleware('role:admin,manager');
+    Route::patch('/clients/{client}', [WorkspaceController::class, 'updateClient'])->middleware('role:admin,manager');
+    Route::delete('/clients/{client}', [WorkspaceController::class, 'destroyClient'])->middleware('role:admin,manager');
     Route::get('/team-members', [WorkspaceController::class, 'teamMembers'])->middleware('role:admin,manager');
     Route::post('/users', [WorkspaceController::class, 'storeUser'])->middleware('role:admin');
     Route::patch('/users/{user}', [WorkspaceController::class, 'updateUser'])->middleware('role:admin');

@@ -15,6 +15,7 @@ export const VaultView: React.FC = () => {
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
   const [uploadDraft, setUploadDraft] = useState({ clientId: '', projectId: '', category: 'asset' });
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [vaultError, setVaultError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
@@ -29,7 +30,7 @@ export const VaultView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    loadData().catch((err) => setVaultError(err.message || 'Failed to load brand vault assets.'));
   }, []);
 
   const filteredFiles = useMemo(() => files.filter((file) => {
@@ -147,9 +148,18 @@ export const VaultView: React.FC = () => {
         </div>
       </div>
 
+      {vaultError && <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">{vaultError}</div>}
+
       {viewType === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredFiles.map((file) => <AssetCard key={file.id} file={file} client={clients.find((item) => item.id === file.client_id)?.name || 'Client'} onDelete={() => deleteFile(file)} />)}
+          {filteredFiles.map((file) => (
+            <AssetCard
+              key={file.id}
+              file={file}
+              client={clients.find((item) => item.id === file.client_id)?.name || 'Client'}
+              onDelete={() => deleteFile(file)}
+            />
+          ))}
           {filteredFiles.length === 0 && <div className="col-span-full py-20 text-center text-gray-400">No assets found.</div>}
         </div>
       ) : (
@@ -167,11 +177,23 @@ export const VaultView: React.FC = () => {
             <tbody className="divide-y divide-gray-50">
               {filteredFiles.map((file) => (
                 <tr key={file.id} className="hover:bg-gray-50/50 transition-colors group">
-                  <td className="px-8 py-4"><div className="flex items-center gap-3"><FileIcon mime={file.mime_type} /><span className="text-sm font-bold text-gray-900 transition-colors group-hover:text-[#FF6321]">{file.name}</span></div></td>
+                  <td className="px-8 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 overflow-hidden rounded-xl bg-gray-50 text-gray-400">
+                        <AssetPreview file={file} compact />
+                      </div>
+                      <span className="text-sm font-bold text-gray-900 transition-colors group-hover:text-[#FF6321]">{file.name}</span>
+                    </div>
+                  </td>
                   <td className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{clients.find((client) => client.id === file.client_id)?.name || 'Client'}</td>
                   <td className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{formatSize(file.size)}</td>
                   <td className="px-8 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{formatDate(file.created_at)}</td>
-                  <td className="px-8 py-4 text-right"><Actions file={file} onDelete={() => deleteFile(file)} /></td>
+                  <td className="px-8 py-4 text-right">
+                    <Actions
+                      file={file}
+                      onDelete={() => deleteFile(file)}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -252,8 +274,12 @@ export const VaultView: React.FC = () => {
 function AssetCard({ file, client, onDelete }: { file: SharedFile; client: string; onDelete: () => void }) {
   return (
     <motion.div whileHover={{ y: -5 }} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg transition-all group relative">
-      <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><Actions file={file} onDelete={onDelete} /></div>
-      <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-6 text-gray-400 group-hover:text-gray-900 transition-colors"><FileIcon mime={file.mime_type} large /></div>
+      <div className="absolute top-4 right-4 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+        <Actions file={file} onDelete={onDelete} />
+      </div>
+      <div className="mb-6 h-40 overflow-hidden rounded-2xl bg-gray-50 text-gray-400 ring-1 ring-gray-100">
+        <AssetPreview file={file} />
+      </div>
       <h4 className="text-sm font-bold text-gray-900 mb-1 truncate">{file.name}</h4>
       <div className="flex items-center gap-2 mb-4">
         <span className="text-[10px] font-bold text-[#FF6321] uppercase tracking-widest">{client}</span>
@@ -271,8 +297,56 @@ function AssetCard({ file, client, onDelete }: { file: SharedFile; client: strin
 function Actions({ file, onDelete }: { file: SharedFile; onDelete: () => void }) {
   return (
     <div className="flex items-center justify-end gap-2">
-      <a href={downloadUrl(file.id)} className="p-2 bg-white rounded-lg shadow-sm border border-gray-50 text-gray-400 hover:text-gray-900"><Download size={14} /></a>
-      <button onClick={onDelete} className="p-2 bg-white rounded-lg shadow-sm border border-gray-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+      <a
+        href={downloadUrl(file.id)}
+        download={file.name}
+        target="_blank"
+        rel="noreferrer"
+        className="cursor-pointer p-2 bg-white rounded-lg shadow-sm border border-gray-50 text-gray-400 hover:text-gray-900"
+        title={`Download ${file.name}`}
+      >
+        <Download size={14} />
+      </a>
+      <button type="button" onClick={onDelete} className="cursor-pointer p-2 bg-white rounded-lg shadow-sm border border-gray-50 text-gray-400 hover:text-red-500"><Trash2 size={14} /></button>
+    </div>
+  );
+}
+
+function AssetPreview({ file, compact = false }: { file: SharedFile; compact?: boolean }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const isImage = file.mime_type?.startsWith('image/');
+
+  useEffect(() => {
+    if (!isImage) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    laravelApi.fetchFileBlob(file.id)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) setPreviewUrl(null);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [file.id, isImage]);
+
+  if (isImage && previewUrl) {
+    return <img src={previewUrl} alt={file.name} className="h-full w-full object-cover" />;
+  }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <FileIcon mime={file.mime_type} large={!compact} />
     </div>
   );
 }

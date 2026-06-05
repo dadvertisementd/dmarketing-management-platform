@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Briefcase,
+  Building2,
   Calendar,
   CheckSquare,
   Instagram,
@@ -18,9 +19,11 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { laravelApi } from '../lib/laravelApi';
+import { avatarStyleForUser, userInitial } from '../lib/avatar';
 import { cn } from '../lib/utils';
 import { ChatView } from './ChatView';
 import { ClientPortal } from './ClientPortal';
+import { ClientsView } from './ClientsView';
 import { DashboardHome } from './DashboardHome';
 import { ProjectsView } from './ProjectsView';
 import { ReportsView } from './ReportsView';
@@ -37,13 +40,14 @@ export const Dashboard: React.FC = () => {
   const [navProjectId, setNavProjectId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ tasks: any[]; projects: any[]; posts: any[] }>({ tasks: [], projects: [], posts: [] });
+  const [searchResults, setSearchResults] = useState<{ clients: any[]; tasks: any[]; projects: any[]; posts: any[] }>({ clients: [], tasks: [], projects: [], posts: [] });
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const agencyNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     ...(isManager ? [{ id: 'team', label: 'Team', icon: Users }] : []),
+    { id: 'clients', label: 'Clients', icon: Building2 },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'projects', label: 'Projects', icon: Briefcase },
     { id: 'social', label: 'Social Media', icon: Instagram },
@@ -58,7 +62,7 @@ export const Dashboard: React.FC = () => {
     { id: 'reports', label: 'Reports', icon: BarChart3 },
   ];
   const canUseGlobalNew = activeTab === 'team' ? isAdmin : (isAdmin || isManager || isWorker);
-  const globalNewLabel = activeTab === 'projects' ? 'Project' : activeTab === 'social' ? 'Post' : activeTab === 'team' ? 'Member' : 'Task';
+  const globalNewLabel = activeTab === 'clients' ? 'Client' : activeTab === 'projects' ? 'Project' : activeTab === 'social' ? 'Post' : activeTab === 'team' ? 'Member' : 'Task';
 
   useEffect(() => {
     if (loading) return;
@@ -85,13 +89,14 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) {
-      setSearchResults({ tasks: [], projects: [], posts: [] });
+      setSearchResults({ clients: [], tasks: [], projects: [], posts: [] });
       return;
     }
 
     let mounted = true;
     const timer = window.setTimeout(async () => {
-      const [projects, tasks, posts] = await Promise.all([
+      const [clients, projects, tasks, posts] = await Promise.all([
+        laravelApi.clients(),
         laravelApi.projects(),
         laravelApi.tasks(),
         laravelApi.socialPosts(),
@@ -100,6 +105,7 @@ export const Dashboard: React.FC = () => {
       if (!mounted) return;
 
       setSearchResults({
+        clients: clients.filter((client) => client.name.toLowerCase().includes(query) || client.industry?.toLowerCase().includes(query)),
         projects: projects.filter((project) => project.name.toLowerCase().includes(query)),
         tasks: tasks.filter((task) => task.title.toLowerCase().includes(query) || task.description?.toLowerCase().includes(query)),
         posts: posts.filter((post) => post.title.toLowerCase().includes(query) || post.content?.toLowerCase().includes(query)),
@@ -172,8 +178,11 @@ export const Dashboard: React.FC = () => {
           {userProfile && !isSidebarCollapsed && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-gray-50 rounded-2xl p-4 mb-2">
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center text-xs font-bold">
-                  {userProfile.displayName?.[0] || 'D'}
+                <div
+                  className="w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-bold"
+                  style={avatarStyleForUser({ id: userProfile.id, name: userProfile.displayName, email: userProfile.email, avatar_color: userProfile.avatarColor })}
+                >
+                  {userInitial(userProfile.displayName, 'D')}
                 </div>
                 <div className="overflow-hidden">
                   <p className="text-sm font-semibold text-gray-900 truncate">{userProfile.displayName || userProfile.email}</p>
@@ -212,10 +221,11 @@ export const Dashboard: React.FC = () => {
               />
               {searchQuery && (
                 <div className="absolute top-full right-0 mt-2 w-[400px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 max-h-[500px] overflow-y-auto z-50">
+                  <SearchSection title="Clients" items={searchResults.clients} icon={Building2} onClick={() => { setActiveTab('clients'); setSearchQuery(''); }} />
                   <SearchSection title="Projects" items={searchResults.projects} icon={Briefcase} onClick={(item) => { setNavProjectId(String(item.id)); setActiveTab('projects'); setSearchQuery(''); }} />
                   <SearchSection title="Tasks" items={searchResults.tasks} icon={CheckSquare} onClick={() => { setActiveTab('tasks'); setSearchQuery(''); }} />
                   <SearchSection title="Social Content" items={searchResults.posts} icon={Instagram} onClick={() => { setActiveTab('social'); setSearchQuery(''); }} />
-                  {searchResults.projects.length + searchResults.tasks.length + searchResults.posts.length === 0 && (
+                  {searchResults.clients.length + searchResults.projects.length + searchResults.tasks.length + searchResults.posts.length === 0 && (
                     <div className="py-8 text-center">
                       <p className="text-sm text-gray-400 italic">No results found for "{searchQuery}"</p>
                     </div>
@@ -288,6 +298,7 @@ export const Dashboard: React.FC = () => {
               )}
               {activeTab === 'roadmap' && <RoadmapView />}
               {activeTab === 'client-hub' && <ClientPortal />}
+              {activeTab === 'clients' && <ClientsView forceShowModal={isNewModalOpen} onModalClose={() => setIsNewModalOpen(false)} />}
               {activeTab === 'projects' && <ProjectsView forceShowModal={isNewModalOpen} onModalClose={() => setIsNewModalOpen(false)} selectedProjectId={navProjectId} />}
               {activeTab === 'tasks' && <TasksView forceShowModal={isNewModalOpen} onModalClose={() => setIsNewModalOpen(false)} />}
               {activeTab === 'team' && <TeamView forceShowModal={isNewModalOpen} onModalClose={() => setIsNewModalOpen(false)} />}

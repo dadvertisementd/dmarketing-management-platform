@@ -3,6 +3,7 @@ import { CheckCheck, Clock, MessageSquare, Search, Send } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { ChatMessage, Client, LaravelUser, Project, laravelApi } from '../lib/laravelApi';
+import { avatarStyleForUser, userInitial } from '../lib/avatar';
 import { cn, formatDate } from '../lib/utils';
 
 export const ChatView: React.FC = () => {
@@ -59,6 +60,22 @@ export const ChatView: React.FC = () => {
     return team.find((member) => member.id === id)?.name || clients.find((client) => client.portal_user_id === id)?.contact_name || 'User';
   };
 
+  const messageUser = (message: ChatMessage) => {
+    if (message.user) return message.user;
+    if (userProfile?.id === message.user_id) {
+      return {
+        id: userProfile.id,
+        name: userProfile.displayName,
+        email: userProfile.email,
+        role: userProfile.role,
+        title: userProfile.title,
+        avatar_color: userProfile.avatarColor,
+      };
+    }
+
+    return team.find((member) => member.id === message.user_id) || null;
+  };
+
   const filteredMessages = messages
     .filter((message) => !activeClientId || message.client_id === activeClientId)
     .filter((message) => message.message.toLowerCase().includes(chatSearch.toLowerCase()) || userName(message.user_id).toLowerCase().includes(chatSearch.toLowerCase()));
@@ -104,16 +121,21 @@ export const ChatView: React.FC = () => {
             <div className="text-center text-gray-400 py-20">No messages yet.</div>
           ) : filteredMessages.map((message) => {
             const isMe = message.user_id === userProfile?.id;
+            const author = messageUser(message);
+            const authorName = author?.name || userName(message.user_id);
+
             return (
               <motion.div key={message.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
                 <div className={cn('flex items-end gap-3', isMe ? 'flex-row-reverse' : 'flex-row')}>
-                  <div className="w-8 h-8 rounded-lg shadow-sm bg-gray-900 text-white flex items-center justify-center text-[10px] font-bold">{userName(message.user_id)[0]}</div>
+                  <div className="w-8 h-8 rounded-lg shadow-sm text-white flex items-center justify-center text-[10px] font-bold" style={avatarStyleForUser(author)}>
+                    {userInitial(authorName)}
+                  </div>
                   <div className={cn('max-w-md p-4 rounded-2xl text-sm font-medium leading-relaxed shadow-sm', isMe ? 'bg-gray-900 text-white rounded-br-none' : 'bg-white text-gray-700 rounded-bl-none border border-gray-100')}>
                     {message.message}
                   </div>
                 </div>
                 <div className={cn('mt-2 flex items-center gap-2 text-[10px] font-bold text-gray-400 px-11 uppercase tracking-tight', isMe ? 'flex-row-reverse' : 'flex-row')}>
-                  <span>{userName(message.user_id)}</span>
+                  <span>{authorName}</span>
                   <span className="w-1 h-1 bg-gray-200 rounded-full" />
                   <span className="flex items-center gap-1 uppercase"><Clock size={10} /> {formatDate(message.created_at)}</span>
                   {isMe && <CheckCheck size={12} className="text-blue-500" />}
