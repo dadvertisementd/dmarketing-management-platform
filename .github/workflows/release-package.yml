@@ -61,9 +61,62 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Copy frontend assets into Laravel public
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath "dist/index.html" -Destination "backend/public/index.html" -Force
+          New-Item -ItemType Directory -Force -Path "backend/public/assets" | Out-Null
+          Copy-Item -Path "dist/assets/*" -Destination "backend/public/assets" -Force
+
+      - name: Mirror Laravel app for cPanel
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "deployment" | Out-Null
+          foreach ($path in @("deployment/dmarketing-app", "deployment/public_html", "deployment/dmarketing-deploy.zip")) {
+            if (Test-Path $path) {
+              Remove-Item -LiteralPath $path -Recurse -Force
+            }
+          }
+          robocopy "backend" "deployment/dmarketing-app" /MIR /XD vendor node_modules storage\app\private storage\framework\cache\data storage\framework\sessions storage\framework\views storage\logs /XF .env database.sqlite .phpunit.result.cache
+          if ($LASTEXITCODE -gt 7) {
+            throw "robocopy failed while copying Laravel app."
+          }
+          $global:LASTEXITCODE = 0
+
+      - name: Install production Composer dependencies
+        working-directory: deployment/dmarketing-app
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+      - name: Create cPanel public_html folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "deployment/public_html" | Out-Null
+          Copy-Item -LiteralPath "deployment/dmarketing-app/public/*" -Destination "deployment/public_html" -Recurse -Force
+          $indexPhp = @'
+          <?php
+
+          use Illuminate\Foundation\Application;
+          use Illuminate\Http\Request;
+
+          define('LARAVEL_START', microtime(true));
+
+          if (file_exists($maintenance = __DIR__.'/../dmarketing-app/storage/framework/maintenance.php')) {
+              require $maintenance;
+          }
+
+          require __DIR__.'/../dmarketing-app/vendor/autoload.php';
+
+          /** @var Application $app */
+          $app = require_once __DIR__.'/../dmarketing-app/bootstrap/app.php';
+
+          $app->handleRequest(Request::capture());
+          '@
+          Set-Content -LiteralPath "deployment/public_html/index.php" -Value $indexPhp -Encoding ASCII
+
       - name: Build deployment ZIP
         shell: pwsh
-        run: ./scripts/build-deployment.ps1 -SkipFrontendBuild
+        run: Compress-Archive -Path "deployment/dmarketing-app", "deployment/public_html" -DestinationPath "deployment/dmarketing-deploy.zip" -Force
 
       - name: Upload deployment ZIP
         uses: actions/upload-artifact@v4
