@@ -277,9 +277,21 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ forceShowModal, onMo
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl">
-              <div className="p-8 border-b border-gray-50">
-                <h3 className="text-2xl font-serif font-bold italic">{editingProject ? 'Edit Project' : 'Create Project'}</h3>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-6 border-b border-gray-50 bg-white p-8">
+                <div>
+                  <h3 className="text-2xl font-serif font-bold italic">{editingProject ? 'Edit Project' : 'Create Project'}</h3>
+                  <p className="mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">Client workstream and team assignment</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gray-100 text-gray-500 transition-all hover:bg-gray-900 hover:text-white disabled:opacity-50"
+                  aria-label="Close project modal"
+                  disabled={isSaving}
+                >
+                  <X size={18} />
+                </button>
               </div>
               <form onSubmit={saveProject} className="p-8 space-y-6">
                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs border border-red-100">{error}</div>}
