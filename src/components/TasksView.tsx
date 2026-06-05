@@ -453,12 +453,48 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
 
       <AnimatePresence>
         {(isAddTaskOpen || editingTask) && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-6 border-b border-gray-50 bg-white p-8">
+          <div className={cn(
+            'fixed inset-0 z-50 bg-black/40 backdrop-blur-sm',
+            editingTask ? 'flex justify-end p-0' : 'flex items-center justify-center p-4',
+          )}>
+            {editingTask && (
+              <button
+                type="button"
+                aria-label="Close task details"
+                className="absolute inset-0 cursor-default"
+                onClick={closeEditingTask}
+                disabled={isSaving}
+              />
+            )}
+            <motion.div
+              key={editingTask ? 'task-detail-drawer' : 'create-task-modal'}
+              initial={editingTask ? { x: '100%' } : { scale: 0.9, opacity: 0 }}
+              animate={editingTask ? { x: 0 } : { scale: 1, opacity: 1 }}
+              exit={editingTask ? { x: '100%' } : { scale: 0.9, opacity: 0 }}
+              transition={editingTask ? { type: 'spring', stiffness: 300, damping: 34 } : undefined}
+              className={cn(
+                'relative z-10 bg-white shadow-2xl',
+                editingTask
+                  ? 'h-full w-full max-w-3xl overflow-y-auto border-l border-gray-100'
+                  : 'w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-[2.5rem]',
+              )}
+            >
+              <div className={cn(
+                'sticky top-0 z-10 flex items-start justify-between gap-6 border-b bg-white',
+                editingTask ? 'border-gray-100 p-6' : 'border-gray-50 p-8',
+              )}>
                 <div>
-                  <h3 className="text-2xl font-serif font-bold italic">{editingTask ? 'Edit Task' : 'Create New Task'}</h3>
-                  {editingTask && <p className="mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">Task detail, files, subtasks, and discussion</p>}
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.25em] text-gray-400">
+                    {editingTask ? 'Task detail' : 'New work item'}
+                  </p>
+                  <h3 className="text-2xl font-serif font-bold italic">{editingTask ? taskFormValue.title || 'Edit Task' : 'Create New Task'}</h3>
+                  {editingTask && (
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+                      <span className="rounded-full bg-gray-900 px-3 py-1 text-white">Details</span>
+                      <span className="rounded-full bg-gray-100 px-3 py-1">Files</span>
+                      <span className="rounded-full bg-gray-100 px-3 py-1">Activity</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -470,7 +506,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
                   <X size={18} />
                 </button>
               </div>
-              <form onSubmit={saveTask} className="p-8 space-y-6">
+              <form onSubmit={saveTask} className={cn('space-y-6', editingTask ? 'p-6 pb-0' : 'p-8')}>
                 {error && <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-100">{error}</div>}
                 <Input label="Title" value={taskFormValue.title} onChange={(value) => updateTaskForm({ title: value })} disabled={isSaving || (!!editingTask && !canManage)} />
                 <Textarea label="Description" value={taskFormValue.description} onChange={(value) => updateTaskForm({ description: value })} disabled={isSaving || (!!editingTask && !canManage)} />
@@ -504,7 +540,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ forceShowModal, onModalClo
                     isSaving={collaborationSaving}
                   />
                 )}
-                <div className="flex gap-4 pt-4">
+                <div className={cn(
+                  'flex gap-4 pt-4',
+                  editingTask && 'sticky bottom-0 -mx-6 mt-8 border-t border-gray-100 bg-white/95 p-6 backdrop-blur',
+                )}>
                   <button type="button" onClick={() => editingTask ? closeEditingTask() : handleCloseModal()} className="flex-1 py-4 text-sm font-bold text-gray-400 hover:text-gray-900 transition-all" disabled={isSaving}>Cancel</button>
                   <button type="submit" disabled={isSaving} className="flex-1 py-4 bg-gray-900 text-white rounded-[1.25rem] font-bold text-sm hover:bg-gray-800 transition-all shadow-lg shadow-gray-200 disabled:opacity-50">{isSaving ? 'Saving...' : editingTask ? 'Save Changes' : 'Create Task'}</button>
                 </div>
